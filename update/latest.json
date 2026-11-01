@@ -1,14 +1,14 @@
 {
-  "version": "2.0.1",
+  "version": "2.0.2",
   "min_shell": "2.0.0",
-  "notes": "Faster startup: shows ProPresenter right away and loads Planning Center in the background (was ~30 s).",
+  "notes": "Planning Center: stays well under its rate limit, backs off when asked, and keeps showing the last order instead of an error.",
   "files": {
     "server.js": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.1/server.js",
-      "sha256": "df876e53b00ceaa5fb60d1ceadfd3f07cf577e7305e48a51e6c9aba633f7eea7"
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.2/server.js",
+      "sha256": "4cba9233aee9aa6687607a0fbb9c3172a62f21af0fa50c11caf1fc6b873291b1"
     },
     "index.html": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.1/index.html",
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.2/index.html",
       "sha256": "bab845e92e75c64285c7635804b8cffab1445110670d6e1a90f2b2718fe90591"
     }
   }

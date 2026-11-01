@@ -41,7 +41,7 @@ async function getJSON(url, headers = {}, timeoutMs = 2000) {
   const t = setTimeout(() => ctl.abort(), timeoutMs);
   try {
     const r = await fetch(url, { headers, signal: ctl.signal });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!r.ok) { const e = new Error('HTTP ' + r.status); e.status = r.status; e.retryAfter = parseInt(r.headers.get('retry-after') || '', 10) || null; throw e; }
     const txt = await r.text();
     return txt ? JSON.parse(txt) : null;
   } finally { clearTimeout(t); }
@@ -92,7 +92,21 @@ class PCO {
     this.auth = this.enabled ? 'Basic ' + Buffer.from(`${cfg.pco_app_id}:${cfg.pco_secret}`).toString('base64') : '';
     this.st = cfg.pco_service_type_id || null; this.auto = !this.st; this.cache = null; this.at = 0; this.types = null; this.pickAt = 0;
   }
-  get(p) { return getJSON('https://api.planningcenteronline.com/services/v2' + p, { Authorization: this.auth }, 8000); }
+  // Planning Center allows about 100 requests per 20 s per person (shared with ProPresenter's own PCO link),
+  // so stay well under it and back off when it says "slow down" (HTTP 429).
+  async get(p) {
+    this.sent ||= [];
+    for (;;) {
+      const now = Date.now();
+      if (this.pauseUntil && now < this.pauseUntil) { await new Promise(r => setTimeout(r, this.pauseUntil - now)); continue; }
+      this.sent = this.sent.filter(t => now - t < 20000);
+      if (this.sent.length < 40) break;
+      await new Promise(r => setTimeout(r, 20000 - (now - this.sent[0]) + 50));
+    }
+    this.sent.push(Date.now());
+    try { return await getJSON('https://api.planningcenteronline.com/services/v2' + p, { Authorization: this.auth }, 8000); }
+    catch (e) { if (e.status === 429) this.pauseUntil = Date.now() + (e.retryAfter || 20) * 1000; throw e; }
+  }
   async serviceTypes() {
     if (this.types && Date.now() - this.types.at < 3600000) return this.types.list;
     const d = await this.get('/service_types?per_page=100&order=sequence');
@@ -106,13 +120,19 @@ class PCO {
     const types = this.auto ? await this.serviceTypes() : [{ id: this.st, name: (this.types?.list || []).find(t => String(t.id) === String(this.st))?.name || null }];
     const now = new Date(), days = new Set([-1, 0, 1].map(k => isoDay(new Date(now.getTime() + k * 86400000))));
     const list = [], jobs = [];
-    for (const t of types) for (const [flt, order] of [['future', 'sort_date'], ['past', '-sort_date']]) jobs.push([t, flt, order]);
+    const since = isoDay(new Date(now.getTime() - 86400000));
+    for (const t of types) jobs.push([t]);
     let authErr = null;
     const worker = async () => {          // 8 at a time instead of one by one (was ~30 s at startup)
       while (jobs.length) {
-        const [t, flt, order] = jobs.shift();
-        let d; try { d = await this.get(`/service_types/${t.id}/plans?filter=${flt}&order=${order}&per_page=3`); }
-        catch (e) { if (/401|403/.test(e.message)) authErr = e; continue; }
+        const [t] = jobs.shift();
+        let d;
+        try { d = await this.get(`/service_types/${t.id}/plans?filter=after&after=${since}&order=sort_date&per_page=4`); }
+        catch (e) {
+          if (/401|403/.test(e.message)) { authErr = e; continue; }
+          if (e.status !== 400) continue;
+          try { d = await this.get(`/service_types/${t.id}/plans?filter=future&order=sort_date&per_page=3`); } catch { continue; }
+        }
         for (const p of d.data || []) {
           const day = (p.attributes.sort_date || '').slice(0, 10);
           if (days.has(day) && !list.some(x => x.id === p.id))
@@ -121,17 +141,19 @@ class PCO {
         }
       }
     };
-    await Promise.all(Array.from({ length: 8 }, worker));
+    await Promise.all(Array.from({ length: 6 }, worker));
     if (authErr && !list.length) throw authErr;
     list.sort((a, b) => a.seq - b.seq);
     this.cand = { at: Date.now(), list };
     return list;
   }
-  async items(c) {          // a plan's items, cached 2 min
+  async items(c, maxAge = 120000) {    // a plan's items, cached; if Planning Center fails, keep the last copy
     this.itemCache ||= new Map();
     const hit = this.itemCache.get(c.id);
-    if (hit && Date.now() - hit.at < 120000) return hit.items;
-    const d = await this.get(`/service_types/${c.st}/plans/${c.id}/items?per_page=100&order=sequence`);
+    if (hit && Date.now() - hit.at < maxAge) return hit.items;
+    let d;
+    try { d = await this.get(`/service_types/${c.st}/plans/${c.id}/items?per_page=100&order=sequence`); }
+    catch (e) { if (hit) { hit.at = Date.now() - maxAge + 30000; return hit.items; } throw e; }
     const items = (d.data || []).map(it => ({ id: it.id, title: it.attributes.title, type: it.attributes.item_type,
       length: it.attributes.length || 0, position: it.attributes.service_position, desc: (it.attributes.description || '').trim() }));
     this.itemCache.set(c.id, { at: Date.now(), items });
@@ -147,8 +169,8 @@ class PCO {
     if (!list.length) return { error: 'No Planning Center plan today' };
     const plName = norm(pp?.active_playlist?.presentation?.playlist?.name || '');
     const ppItems = (pp?.playlist?.items || []).filter(i => i.type !== 'header').map(i => i.id?.name).filter(Boolean);
-    let best = null, bestScore = 0;
-    for (const c of list) {
+    // 1) by name (free); 2) only if that doesn't settle it, compare items for the likeliest few plans
+    const scored = list.map(c => {
       let sc = 0;
       if (plName) {
         if (c.title && plName.includes(norm(c.title))) sc += 4;
@@ -156,16 +178,20 @@ class PCO {
         if (c.dates && plName.includes(norm(c.dates))) sc += 2;
         if (c.service_type && plName.includes(norm(c.service_type))) sc += 1;
       }
-      if (ppItems.length) {
+      return { c, sc: sc + (c.today ? 0.5 : 0) };
+    }).sort((x, y) => y.sc - x.sc);
+    const settled = scored[0].sc >= 3 && (scored.length < 2 || scored[1].sc < scored[0].sc);
+    if (!settled && ppItems.length) {
+      for (const x of scored.slice(0, 6)) {
         try {
-          const its = (await this.items(c)).filter(i => i.type !== 'header').map(i => i.title);
+          const its = (await this.items(x.c, 600000)).filter(i => i.type !== 'header').map(i => i.title);
           const hits = ppItems.filter(n => its.some(t => simName(n, t) >= 0.9)).length;
-          sc += 6 * hits / ppItems.length;
+          x.sc += 6 * hits / ppItems.length;
         } catch { /* keep name score */ }
       }
-      if (c.today) sc += 0.5;
-      if (sc > bestScore) { bestScore = sc; best = c; }
+      scored.sort((x, y) => y.sc - x.sc);
     }
+    let best = scored[0].sc > 0 ? scored[0].c : null, bestScore = scored[0].sc;
     // nothing open in ProPresenter yet -> today's plan (if there's exactly one, or the next one up)
     if (!plName && !ppItems.length) best = list.filter(c => c.today)[0] || null, bestScore = best ? 1 : 0;
     if (!best || bestScore < 1.5 && plName) {
@@ -189,12 +215,14 @@ class PCO {
   async detail(c) {
     if (this.cache && this.cache.id === c.id && Date.now() - this.at < 120000) return this.cache;
     const out = { id: c.id, series: c.series, title: c.title, dates: c.dates, service_type: c.service_type, items: [], times: [], live_item_id: null };
-    try { out.items = await this.items(c); } catch (e) { out.error = 'Planning Center items: ' + e.message; }
+    const prev = this.cache && this.cache.id === c.id ? this.cache : null;
+    try { out.items = await this.items(c); }
+    catch (e) { if (prev?.items?.length) out.items = prev.items; else out.error = 'Planning Center items: ' + (e.status === 429 ? 'busy, retrying shortly' : e.message); }
     try {
       const d = await this.get(`/service_types/${c.st}/plans/${c.id}/plan_times`);
       out.times = (d.data || []).filter(t => t.attributes.time_type === 'service' && t.attributes.starts_at)
         .map(t => ({ name: t.attributes.name, starts_at: t.attributes.starts_at })).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
-    } catch (e) { out.error = out.error || 'Planning Center times: ' + e.message; }
+    } catch (e) { if (prev?.times?.length) out.times = prev.times; else out.error = out.error || 'Planning Center times: ' + (e.status === 429 ? 'busy, retrying shortly' : e.message); }
     try { // Services LIVE, only if someone runs it
       const d = await this.get(`/service_types/${c.st}/plans/${c.id}/live?include=current_item_time`);
       const cur = d?.data?.relationships?.current_item_time?.data;
