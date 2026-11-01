@@ -705,7 +705,7 @@ class StatusService {
       res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'max-age=86400' });
       return res.end(fs.readFileSync(path.join(path.dirname(this.htmlPath), 'icon.png')));
     }
-    if (req.url === '/' || req.url.startsWith('/index.html') || req.url.startsWith('/?'))
+    if (req.url === '/' || req.url.startsWith('/index.html') || req.url.startsWith('/?') || /^\/(tv|mobile|m)\/?(\?|$)/.test(req.url))
       return send(200, 'text/html; charset=utf-8', fs.readFileSync(this.htmlPath));
     send(404, 'text/plain', 'not found');
   }
