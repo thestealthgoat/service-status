@@ -71,7 +71,11 @@ class ProPresenter {
     try { out.version = await this.get('/version'); out.ok = true; }
     catch (e) { out.error = `Can't reach ProPresenter at ${this.base} — is ProPresenter open with Network turned on?`; return out; }
     const tries = [['slide_index', '/v1/presentation/slide_index'], ['active_playlist', '/v1/playlist/active'],
-                   ['timers', '/v1/timers/current'], ['status_slide', '/v1/status/slide']];
+                   ['timers', '/v1/timers/current'], ['status_slide', '/v1/status/slide'],
+                   // videos: ProPresenter's own video countdown + where each layer's media is up to
+                   ['video_countdown', '/v1/timer/video_countdown'],
+                   ['tp_time', '/v1/transport/presentation/time'], ['tp_cur', '/v1/transport/presentation/current'],
+                   ['ta_time', '/v1/transport/announcement/time'], ['ta_cur', '/v1/transport/announcement/current']];
     await Promise.all(tries.map(async ([k, p]) => { try { out[k] = await this.get(p); } catch { out[k] = null; } }));
     try {
       const pl = out.active_playlist?.presentation?.playlist;
@@ -340,6 +344,35 @@ function serviceStart(pco) {
   return [best, `${((h + 11) % 12) + 1}${h < 12 ? 'AM' : 'PM'}`];
 }
 
+// A video is "playing" while its playhead keeps moving. Time left comes from ProPresenter's video countdown,
+// or from the media's length minus where it's up to. When it stops, the screen goes back to the normal timer.
+const VID = {};
+function num(v) { if (typeof v === 'number') return v; if (v && typeof v === 'object') { for (const k of ['time', 'seconds', 'value']) if (typeof v[k] === 'number') return v[k]; } return null; }
+function videoState(pp, now) {
+  const layers = [['presentation', pp.tp_time, pp.tp_cur], ['announcement', pp.ta_time, pp.ta_cur]];
+  let best = null;
+  for (const [layer, tRaw, cur] of layers) {
+    const t = num(tRaw); if (t === null) continue;
+    const c = cur && typeof cur === 'object' ? cur : {};
+    const name = c.name || c.id?.name || c.media?.name || '';
+    const dur = num(c.duration) ?? num(c.length) ?? num(c.media?.duration);
+    const v = (VID[layer] ||= { t: null, moved: 0, name: '' });
+    if (v.name !== name) { v.name = name; v.moved = 0; }
+    if (v.t !== null && Math.abs(t - v.t) > 0.05) v.moved = now;
+    v.t = t;
+    const playing = v.moved && now - v.moved < 2500;
+    if (!playing) continue;
+    let left = dur ? dur - t : null;
+    if (layer === 'presentation') { const vc = typeof pp.video_countdown === 'string' ? parseClock(pp.video_countdown) : num(pp.video_countdown); if (vc !== null && vc > 0) left = vc; }
+    if (left === null || left <= 0.5) continue;
+    const total = dur || (t + left);
+    const out = { layer, name: String(name).replace(/\.(mp4|mov|m4v|mxf|avi|mkv|webm)$/i, ''), left: Math.round(left), total: Math.round(total),
+      pct: Math.max(0, Math.min(100, 100 * t / total)), ends: clock(new Date(now + left * 1000)) };
+    if (!best || layer === 'presentation') best = out;
+  }
+  return best;
+}
+
 function buildState(cfg, pp, pco, store) {
   const now = Date.now();
   const state = { now: clockSec(new Date()), pp: { ok: !!pp.ok, error: pp.error || null },
@@ -380,6 +413,7 @@ function buildState(cfg, pp, pco, store) {
   }
   // timers
   state.timers = (pp.timers || []).map(t => ({ name: t.id?.name || t.name, time: t.time, state: t.state }));
+  state.video = videoState(pp, now);
   state.message_timer = (cfg.message_timer_name ? state.timers.find(t => t.name === cfg.message_timer_name)
     : (state.timers.find(t => MSG_WORDS.test(t.name || '')) || state.timers.find(t => t.state === 'running' && parseClock(t.time) !== null))) || null;
   if (state.message_timer) state.message_timer_label = state.message_timer.name || 'Timer';
@@ -517,6 +551,7 @@ function buildState(cfg, pp, pco, store) {
     // projected times for what's left
     let t = TRACK.done ? TRACK.lastSeen : A + Math.max(expected(curRow), el) * 1000;
     if (!TRACK.done && isMsgRow(curRow) && msg?.projected_ts) t = Math.max(now, msg.projected_ts);
+    else if (!TRACK.done && state.video) t = now + state.video.left * 1000;     // a video ends exactly when its time runs out
     for (let j = curRow + 1; j < rows.length; j++) {
       if (!rows[j].planned_ts) continue;
       rows[j].proj = hm(t); rows[j].proj_late = Math.round((t - rows[j].planned_ts) / 1000); t += expected(j) * 1000;
@@ -540,6 +575,14 @@ function buildState(cfg, pp, pco, store) {
 const DEMO_T0 = Date.now();
 function demoPP() {
   const k = Math.floor((Date.now() - DEMO_T0) / 3000) % 34;
+  if (process.env.TFC_DEMO_VIDEO) {  // video phase for testing video time left
+    const t = ((Date.now() - DEMO_T0) / 1000) % 80 + 5;
+    return { ok: true, slide_index: { presentation_index: { index: 0, presentation_id: { uuid: 'demo-cn', name: 'Church News' } } },
+      presentation: { presentation: { groups: [{ name: '', slides: [{ label: '', text: '' }] }] } },
+      timers: [{ id: { name: 'Message Timer' }, time: '00:40:00', state: 'stopped' }],
+      tp_time: t, tp_cur: { name: '11.01.26 Church News.mp4', duration: 83.5 },
+      active_playlist: { presentation: { playlist: { uuid: 'demo-pl', name: 'Sunday' }, item: { uuid: 'i11', name: 'Church News' } } }, playlist: { items: [] } };
+  }
   if (process.env.TFC_DEMO_SONG) {   // song phase for testing the song timeline
     const gs = [['Intro', 1], ['Verse 1', 4], ['Chorus', 4], ['Verse 2', 4], ['Chorus', 4], ['Bridge', 4], ['Chorus', 4], ['Tag', 2]];
     const groups = gs.map(([name, n]) => ({ name, slides: Array.from({ length: n }, (_, i) => ({ label: '', text: name + ' line ' + (i + 1) })) }));
@@ -582,7 +625,7 @@ function demoPCO() {
   return { id: 'demo', series: 'Sermon Series', dates: 'November 1, 2026',
     items: rows.map(([title, type, length, position], i) => ({ id: String(i), title, type, length, position,
       desc: ({ 'The Joy': 'Maya', 'Build My Life': 'Chris', 'More Than Able': 'Ana', 'Close Worship: Pastor Sam Lee': 'Communion' })[title] || '' })),
-    times: [{ name: '9AM', starts_at: s9.toISOString() }, { name: '11AM', starts_at: s11.toISOString() }], live_item_id: process.env.TFC_DEMO_SONG ? null : '14' };
+    times: [{ name: '9AM', starts_at: s9.toISOString() }, { name: '11AM', starts_at: s11.toISOString() }], live_item_id: process.env.TFC_DEMO_SONG || process.env.TFC_DEMO_VIDEO ? null : '14' };
 }
 
 // 180x180 home-screen icon for iPhone/iPad (no transparent corners, so iOS doesn't add a black border)

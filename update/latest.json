@@ -1,15 +1,15 @@
 {
-  "version": "2.0.6",
+  "version": "2.0.7",
   "min_shell": "2.0.0",
-  "notes": "iPhone/iPad home-screen app: keeps the header and buttons clear of the Dynamic Island / notch and the home bar.",
+  "notes": "Video time left: while a video plays in ProPresenter, the timer spot (and the Now panel) shows the video's time left and when it ends, then switches back to your timer when it stops.",
   "files": {
     "server.js": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.6/server.js",
-      "sha256": "9f3fe4cc315b280dd4c904b5221c4882fd053b0383c21e3dd4921074364dae92"
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.7/server.js",
+      "sha256": "806b80d924cf63e24e14868d7b4ff0eecda07d9435d80ba02b8c623cae8f767b"
     },
     "index.html": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.6/index.html",
-      "sha256": "052c79d9c4d42b3ffa648c97e280dcbecac7cb0faa5ecfb080cb5e6745ea106c"
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.7/index.html",
+      "sha256": "c926719cd6c2a2c0a802f25792e630c990048af06f8881b1840f98d138f1d22e"
     }
   }
 }

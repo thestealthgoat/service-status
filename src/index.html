@@ -74,7 +74,7 @@
   .clock { font-size: 64px; font-weight: 300; letter-spacing: -2px; line-height: 1; }
   .k { color: var(--mute); font-size: 16px; margin-top: 30px; }
   .v { font-size: 50px; font-weight: 650; letter-spacing: -1px; line-height: 1.1; }
-  .v.over { color: var(--late); }
+  .v.over { color: var(--late); } .v.vid { color: var(--acc); }
   .sm { color: var(--mute); font-size: 15px; margin-top: 2px; }
   .corner { margin-top: auto; text-align: right; padding-top: 24px; }
   .corner .k { margin-top: 0; }
@@ -377,7 +377,7 @@ function setView(v) { view = v; try { localStorage.setItem('tfc_view', v); } cat
 const tcls = r => r.actual ? '' : (r.proj_late == null ? '' : (r.proj_late >= 120 ? 'late' : (r.proj_late <= -120 ? 'early' : '')));
 // phone: just what's on now, what's next, and the two after that
 function nowNext(s, rows, cur) {
-  let h = cur >= 0 ? '<li class="now" id="nowli">' + nowPanel(s, rows[cur]) + '</li>' : ((s.message || s.deck) ? '<li class="now">' + nowPanel(s, null) + '</li>' : '<li class="wait">Nothing up yet</li>');
+  let h = cur >= 0 ? '<li class="now" id="nowli">' + nowPanel(s, rows[cur]) + '</li>' : ((s.message || s.deck || s.video) ? '<li class="now">' + nowPanel(s, null) + '</li>' : '<li class="wait">Nothing up yet</li>');
   const up = rows.slice(cur + 1).filter(r => r.planned || r.proj);
   const n = up[0];
   if (n) h += '<li class="next"><div class="k2">Next' + (prefs.headers && n._sec && n._sec !== (rows[cur] && rows[cur]._sec) ? ' · <span style="color:var(--acc)">' + esc(n._sec) + '</span>' : '') + (n.proj || n.planned ? ' at <span class="' + tcls(n) + '">' + esc(n.proj || n.planned) + '</span>' : '') + '</div>' +
@@ -427,6 +427,12 @@ function nowPanel(s, r) {
     h += timeline(d.pct, d.marks, on, false);
     h += '<div class="r2"><span>Slide <b>' + (d.index + 1) + '/' + d.count + '</b></span>' +
          (s.current_item_len_s ? '<span>Planned <b>' + mmss(s.current_item_len_s) + '</b></span>' : '') + '</div>';
+  } else if (s.video) {
+    const v = s.video;
+    h += '<div class="big">' + mmss(v.left) + ' <small>left of ' + mmss(v.total) + '</small></div>';
+    if (v.name) h += '<div class="line">' + esc(v.name) + '</div>';
+    h += timeline(v.pct, [], -1, false);
+    h += '<div class="r2"><span>Ends <b>' + esc(v.ends) + '</b></span></div>';
   } else {
     const el = s.current_item_el_s, len = s.current_item_len_s;
     h += '<div class="big">' + (el != null ? mmss(el) : '—') + (len ? ' <small>of ' + mmss(len) + '</small>' : '') + '</div>';
@@ -442,7 +448,7 @@ function render(s) {
   $('clock').innerHTML = cm ? cm[1] + '<span class="sec">' + (cm[2] || '') + '</span>' : '--:--';
   $('svc').textContent = s.service ? s.service + ' Service' : 'Service';
   $('series').textContent = s.pco?.items_matched === false || s.pco?.note ? (s.playlist || '') : [s.pco?.service_type, s.pco?.title || s.pco?.series].filter(Boolean).join(' — ');
-  $('mtlabel').textContent = s.message_timer_label || 'Message timer';
+  $('mtlabel').textContent = s.message_timer_label || 'Message timer';   // replaced below while a video plays
   if (s.setup_needed && !setupShown) { setupShown = true; openSettings(true); }
   $('pp').className = 'st ' + (s.pp?.ok ? 'ok' : 'bad');
   $('pco').className = 'st ' + (s.pco?.enabled && !s.pco?.error ? 'ok' : (s.pco?.enabled ? 'bad' : ''));
@@ -466,10 +472,15 @@ function render(s) {
   d.className = 'v ' + (s.drift_secs == null ? '' : (s.drift_secs > 60 ? 'late' : 'good'));
   $('ends').textContent = s.service_end_projected ? 'Ends ' + s.service_end_projected + ' · planned ' + (s.service_end_planned || '') :
                           (s.service_end_planned ? 'Planned end ' + s.service_end_planned : '');
-  const mt = s.message_timer, t = $('mtimer');
-  t.textContent = mt ? (shortTimer(mt.time) || '—') : '—';
-  t.className = 'v' + (mt && /^-/.test(mt.time || '') ? ' over' : '');
-  $('target').textContent = s.timer_target ? 'Runs out ' + s.timer_target : '';
+  const mt = s.message_timer, t = $('mtimer'), vid = s.video;
+  if (vid) {          // a video is playing: show its time left, then go back to the timer when it stops
+    $('mtlabel').textContent = 'Video left'; t.textContent = mmss(vid.left); t.className = 'v vid';
+    $('target').textContent = (vid.name ? vid.name + ' · ' : '') + 'ends ' + vid.ends;
+  } else {
+    t.textContent = mt ? (shortTimer(mt.time) || '—') : '—';
+    t.className = 'v' + (mt && /^-/.test(mt.time || '') ? ' over' : '');
+    $('target').textContent = s.timer_target ? 'Runs out ' + s.timer_target : '';
+  }
   $('mpct').textContent = s.message_pct == null ? 'Not started' : Math.round(s.message_pct) + '%';
   $('mpct').className = 'mpct' + (s.message_pct == null ? ' none' : '');
 
@@ -488,7 +499,7 @@ function render(s) {
             '</span><span>' + esc(r.title) + (r.desc ? '<span class="who">' + esc(r.desc) + '</span>' : '') +
             '</span><span class="l">' + (r.length ? mmss(r.length) : '') + '</span></li>';
   });
-  if (curIdx < 0 && (s.message || s.deck)) html = '<li class="now">' + nowPanel(s, null) + '</li>' + html;
+  if (curIdx < 0 && (s.message || s.deck || s.video)) html = '<li class="now">' + nowPanel(s, null) + '</li>' + html;
   if (phone.matches && rows.length) html = (view === 'all' && !document.body.classList.contains('ipad')) ? miniOrder(rows, curIdx) : nowNext(s, rows, curIdx);
   if (document.body.classList.contains('ipad')) $('list2').innerHTML = rows.length ? miniOrder(rows, curIdx) : '';
   $('seg-now').className = view === 'now' ? 'on' : ''; $('seg-all').className = view === 'all' ? 'on' : '';
@@ -510,11 +521,16 @@ function renderTV(s) {
   const d = $('tvdrift'); d.textContent = s.drift ?? '—';
   d.className = 'v ' + (s.drift_secs == null ? '' : (s.drift_secs > 60 ? 'late' : 'good'));
   $('tvends').textContent = s.service_end_projected ? 'Ends ' + s.service_end_projected + ' · planned ' + (s.service_end_planned || '') : '';
-  const mt = s.message_timer, t = $('tvtimer');
-  $('tvmtl').textContent = s.message_timer_label || 'Message timer';
-  t.textContent = mt ? (shortTimer(mt.time) || '—') : '—';
-  t.className = 'v' + (mt && /^-/.test(mt.time || '') ? ' over' : '');
-  $('tvtarget').textContent = s.timer_target ? 'Runs out ' + s.timer_target : '';
+  const mt = s.message_timer, t = $('tvtimer'), vid = s.video;
+  if (vid) {
+    $('tvmtl').textContent = 'Video left'; t.textContent = mmss(vid.left); t.className = 'v vid';
+    $('tvtarget').textContent = (vid.name ? vid.name + ' · ' : '') + 'ends ' + vid.ends;
+  } else {
+    $('tvmtl').textContent = s.message_timer_label || 'Message timer';
+    t.textContent = mt ? (shortTimer(mt.time) || '—') : '—';
+    t.className = 'v' + (mt && /^-/.test(mt.time || '') ? ' over' : '');
+    $('tvtarget').textContent = s.timer_target ? 'Runs out ' + s.timer_target : '';
+  }
   $('tvmpct').textContent = s.message_pct == null ? '' : 'Message ' + Math.round(s.message_pct) + '%';
 
   withSections(s);
@@ -523,7 +539,7 @@ function renderTV(s) {
   const r = cur >= 0 ? rows[cur] : null, m = s.message, dk = s.deck;
   // now
   let h = '';
-  if (!r && !m && !dk) h = '<div class="tvwait">' + (s.pp?.ok ? 'Nothing up yet' : 'Waiting for ProPresenter…') + '</div>';
+  if (!r && !m && !dk && !s.video) h = '<div class="tvwait">' + (s.pp?.ok ? 'Nothing up yet' : 'Waiting for ProPresenter…') + '</div>';
   else {
     const title = r ? r.title : (m ? m.name : (s.current_item || ''));
     h += '<div class="lbl">Now' + (prefs.headers && r && r._sec ? ' · <span class="sec">' + esc(r._sec) + '</span>' : '') + (s.current_item_started ? ' · started ' + esc(s.current_item_started) : '') + '</div>';
@@ -543,6 +559,12 @@ function renderTV(s) {
       h += timeline(dk.pct, dk.marks, on, false);
       h += '<div class="stats">' + (s.current_item_len_s ? '<span><b>' + mmss(s.current_item_el_s) + '</b> of ' + mmss(s.current_item_len_s) + '</span>' : '') +
            '<span>Slide <b>' + (dk.index + 1) + '/' + dk.count + '</b></span></div>';
+    } else if (s.video) {
+      const v = s.video;
+      h += '<div class="huge">' + mmss(v.left) + ' <small>left</small></div>';
+      if (v.name) h += '<div class="line">' + esc(v.name) + '</div>';
+      h += timeline(v.pct, [], -1, false);
+      h += '<div class="stats"><span>Ends <b>' + esc(v.ends) + '</b></span><span><b>' + mmss(v.total) + '</b> long</span></div>';
     } else {
       const el = s.current_item_el_s, len = s.current_item_len_s;
       h += '<div class="huge">' + (el != null ? mmss(el) : '—') + (len ? ' <small>of ' + mmss(len) + '</small>' : '') + '</div>';
