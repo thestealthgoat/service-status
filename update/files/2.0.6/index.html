@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Service Status</title>
+<link rel="icon" href="/icon.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/touch-icon-v2.png">
+<meta name="apple-mobile-web-app-title" content="Service Status">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#10141a">
+<style>
+  :root {
+    --bg: #10141a; --panel: #171d25; --line: #252d38; --text: #eef1f5; --mute: #8792a2; --dim: #5d6876;
+    --acc: #f5a524; --good: #3ddc84; --late: #ff6b6b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text);
+    font: 16px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter Display", Inter, system-ui, sans-serif;
+    font-variant-numeric: tabular-nums; }
+  body { display: flex; flex-direction: column;
+    /* home-screen web app on iPhone/iPad draws under the Dynamic Island / notch and home bar: keep clear of them */
+    padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0); }
+  .modal { padding-top: calc(16px + env(safe-area-inset-top, 0)) !important; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0)) !important; }
+  .late { color: var(--late); } .good { color: var(--good); } .mute { color: var(--mute); }
+  .hidden { display: none !important; }
+
+  /* top bar */
+  .top { display: flex; align-items: center; gap: 14px; padding: 16px 32px; color: var(--mute); font-size: 17px; flex: none; }
+  .top img { width: 26px; height: 26px; border-radius: 6px; }
+  .top .svc { color: var(--text); font-weight: 650; }
+  .top .series { font-size: 15px; }
+  .sp { flex: 1; }
+  .st { font-size: 15px; white-space: nowrap; }
+  .st::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--dim); margin-right: 6px; vertical-align: 1px; }
+  .st.ok::before { background: var(--good); } .st.bad::before { background: var(--late); }
+  .demo { font-size: 12px; padding: 3px 8px; border-radius: 99px; background: #4a3a10; color: var(--acc); }
+  .gear { background: none; border: 1px solid var(--line); color: var(--mute); border-radius: 99px; padding: 4px 12px; font-size: 13px; cursor: pointer; }
+  .gear:hover, .gear:focus-visible { color: var(--text); border-color: var(--mute); }
+
+  /* main layout: running order + right column */
+  .layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 40px; padding: 4px 32px 20px; }
+  .order { overflow-y: auto; min-height: 0; padding-right: 6px; scrollbar-width: thin; }
+  ol { list-style: none; }
+  li.row { display: grid; grid-template-columns: 64px 1fr 60px; align-items: baseline; gap: 6px; padding: 9px 0; font-size: 19px; border-bottom: 1px solid var(--line); }
+  li.row .t { color: var(--mute); font-size: 17px; }
+  li.row .t.late { color: var(--late); } li.row .t.early { color: var(--good); }
+  li.row .l { color: var(--mute); text-align: right; font-size: 15px; }
+  li.row.done, li.row.done .t, li.row.done .l { color: var(--dim); }
+  .who { color: var(--acc); font-size: .85em; margin-left: 8px; white-space: nowrap; }
+  li.row.done .who { opacity: .55; }
+
+  /* the item that's on now */
+  li.now { background: var(--panel); border-left: 4px solid var(--acc); border-radius: 10px; padding: 18px 22px 20px; margin: 10px 0; }
+  .now .r1 { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .now h2 { font-size: 26px; font-weight: 650; }
+  .now .started { color: var(--mute); font-size: 15px; white-space: nowrap; }
+  .now .big { font-size: 60px; font-weight: 700; letter-spacing: -2px; line-height: 1.05; margin-top: 10px; }
+  .now .big small { font-size: 28px; color: var(--mute); font-weight: 500; letter-spacing: 0; }
+  .now .line { color: var(--mute); font-size: 18px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tl { position: relative; height: 12px; background: var(--line); border-radius: 6px; margin: 26px 0 44px; }
+  .tl .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--acc); border-radius: 6px; }
+  .tl .fill.over { background: var(--late); }
+  .tl .mk { position: absolute; top: -8px; width: 2px; height: 28px; background: var(--text); opacity: .45; }
+  .tl .ml { position: absolute; top: 24px; font-size: 14px; color: var(--mute); transform: translateX(-50%); white-space: nowrap; }
+  .tl .ml.on { color: var(--text); font-weight: 650; }
+  .now .r2 { display: flex; flex-wrap: wrap; gap: 8px 28px; font-size: 17px; color: var(--mute); }
+  .now .r2 b { color: var(--text); font-weight: 600; }
+
+  /* right column */
+  aside { display: flex; flex-direction: column; padding-top: 6px; min-height: 0; }
+  .clock { font-size: 64px; font-weight: 300; letter-spacing: -2px; line-height: 1; }
+  .k { color: var(--mute); font-size: 16px; margin-top: 30px; }
+  .v { font-size: 50px; font-weight: 650; letter-spacing: -1px; line-height: 1.1; }
+  .v.over { color: var(--late); }
+  .sm { color: var(--mute); font-size: 15px; margin-top: 2px; }
+  .corner { margin-top: auto; text-align: right; padding-top: 24px; }
+  .corner .k { margin-top: 0; }
+  .mpct { font-size: 110px; font-weight: 250; letter-spacing: -5px; line-height: .95; }
+  .mpct.none { font-size: 22px; letter-spacing: 0; color: var(--dim); font-weight: 400; }
+  .clock .sec { font-size: .45em; color: var(--mute); letter-spacing: 0; margin-left: 2px; }
+
+  .foot { flex: none; padding: 0 32px 12px; color: var(--dim); font-size: 13px; display: flex; gap: 18px; }
+  .foot b { color: var(--mute); font-weight: 500; }
+  #upd { color: var(--acc); } #upd button, .sheet .linkbtn { background: none; border: 1px solid var(--acc); color: var(--acc); border-radius: 99px; padding: 2px 10px; font: inherit; font-size: 12px; cursor: pointer; margin-left: 6px; }
+  .err { color: var(--late); }
+  .wait { color: var(--mute); font-size: 20px; padding: 30px 0; }
+
+  .seg { display: none; }
+  li.next { padding: 16px 4px 6px; }
+  li.next .k2 { color: var(--mute); font-size: 14px; }
+  li.next .nt { font-size: 24px; font-weight: 650; margin-top: 2px; }
+  li.next .nm { color: var(--mute); font-size: 16px; margin-top: 2px; }
+  li.then { display: grid; grid-template-columns: 52px 1fr 44px; gap: 6px; padding: 8px 4px; font-size: 16px; border-top: 1px solid var(--line); }
+  li.then .t { color: var(--mute); font-size: 14px; } li.then .l { color: var(--mute); text-align: right; font-size: 14px; }
+  li.then .t.late { color: var(--late); }
+  li.mini { display: grid; grid-template-columns: 44px 1fr 40px; gap: 6px; padding: 5px 4px; font-size: 14px; border-bottom: 1px solid var(--line); }
+  li.mini span:nth-child(2) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  li.mini .t, li.mini .l { color: var(--mute); font-size: 13px; } li.mini .l { text-align: right; }
+  li.mini.done, li.mini.done .t { color: var(--dim); }
+  li.mini.cur { background: var(--panel); border-left: 3px solid var(--acc); border-radius: 6px; font-weight: 650; }
+  li.mini .t.late { color: var(--late); }
+
+  /* phones (and /mobile on any size) */
+  body.m .top { padding: 12px 16px; gap: 10px; }body.m .top .series { display: none; }
+  body.m .layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); align-content: start; gap: 14px; padding: 4px 16px 16px; }
+  body.m .demo { white-space: nowrap; }body.m .foot #phone { display: none; }
+  body.m .st { font-size: 0; }body.m .st::before { margin: 0; }
+  body.m aside { order: -1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; align-items: end; padding: 0; }
+  body.m aside > div { min-width: 0; }
+  body.m aside > div:nth-child(2), body.m aside > div:nth-child(3) { grid-row: 2; }
+  body.m .clock { font-size: 36px; letter-spacing: -1px; }
+  body.m .k { margin-top: 0; font-size: 13px; }body.m .v { font-size: 28px; }body.m .sm { display: none; }
+  body.m .corner { margin: 0; padding: 0; grid-row: 1; grid-column: 2; }body.m .mpct { font-size: 36px; letter-spacing: -1px; }body.m .mpct.none { font-size: 16px; }
+  body.m li.row { grid-template-columns: 52px 1fr 48px; font-size: 16px; }body.m li.row .t { font-size: 14px; }
+  body.m aside { grid-template-columns: repeat(4, auto); justify-content: space-between; gap: 0 10px; }
+  body.m aside > div:nth-child(2), body.m aside > div:nth-child(3) { grid-row: auto; }
+  body.m .corner { grid-row: auto; grid-column: auto; }
+  body.m .clock { font-size: 28px; }body.m .clock .sec { display: none; }body.m .v { font-size: 26px; }body.m .mpct { font-size: 28px; }body.m .mpct.none { font-size: 14px; }
+  body.m .k { font-size: 12px; }
+  body.m .seg { display: flex; gap: 4px; background: var(--panel); border-radius: 9px; padding: 3px; margin-bottom: 6px; position: sticky; top: 0; z-index: 2; }
+  body.m .seg button { flex: 1; background: none; border: 0; color: var(--mute); font: inherit; font-size: 14px; padding: 7px 0; border-radius: 7px; cursor: pointer; }
+  body.m .seg button.on { background: #273140; color: var(--text); font-weight: 600; }
+  body.m li.now { margin: 6px 0 0; padding: 16px 16px 18px; }
+  body.m .now h2 { font-size: 20px; }body.m .now .big { font-size: 40px; }body.m .now .big small { font-size: 20px; }
+  body.m .foot { padding: 0 16px 10px; flex-wrap: wrap; }
+  
+
+  /* display settings */
+  li.hdr { color: var(--acc); font-size: 13px; font-weight: 650; padding: 16px 0 4px; border: 0; letter-spacing: .02em; }
+  body.m li.hdr { padding: 12px 4px 2px; font-size: 12px; }
+  body.no-people .who { display: none; }
+  body.no-lengths li .l { visibility: hidden; }
+  body.no-seconds .clock .sec { display: none; }
+  body.size-l .order, body.size-l #list2 { zoom: 1.15; } body.size-xl .order, body.size-xl #list2 { zoom: 1.32; }
+  body.size-l aside { zoom: 1.08; } body.size-xl aside { zoom: 1.15; }
+  body.m.size-l aside, body.m.size-xl aside { zoom: 1; }
+  body.tv.size-l #tv { zoom: 1.08; } body.tv.size-xl #tv { zoom: 1.15; }
+  .tvnow .sec, .tvnext .sec { color: var(--acc); font-size: 1.4vw; font-weight: 600; }
+  .dbtn { background: none; border: 1px solid var(--line); color: var(--mute); border-radius: 99px; padding: 4px 12px; font-size: 13px; cursor: pointer; }
+  .dbtn:hover, .dbtn:focus-visible { color: var(--text); border-color: var(--mute); }
+  .sheet .tog { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+  .sheet .tog input[type=checkbox] { appearance: none; width: 44px; height: 26px; border-radius: 13px; background: #2b3441; position: relative; cursor: pointer; transition: background .15s; flex: none; }
+  .sheet .tog input[type=checkbox]::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left .15s; }
+  .sheet .tog input[type=checkbox]:checked { background: #2fb36b; } .sheet .tog input[type=checkbox]:checked::after { left: 21px; }
+  .sheet .tog small { display: block; color: var(--mute); font-size: 12px; }
+  body.m .dbtn { padding: 4px 10px; }
+
+  /* iPad on /mobile: what's on now on the left, the whole order on the right */
+  #list2 { display: none; }
+  body.m.ipad .layout { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); padding: 6px 24px 20px; gap: 18px 28px; }
+  body.m.ipad aside { grid-column: 1 / -1; }
+  body.m.ipad .seg { display: none; }
+  body.m.ipad #list2 { display: block; overflow-y: auto; min-height: 0; }
+  body.m.ipad .clock { font-size: 40px; } body.m.ipad .v { font-size: 36px; } body.m.ipad .mpct { font-size: 40px; } body.m.ipad .k { font-size: 14px; }
+  body.m.ipad .now h2 { font-size: 24px; } body.m.ipad .now .big { font-size: 54px; }
+  body.m.ipad li.mini { font-size: 16px; padding: 7px 4px; grid-template-columns: 52px 1fr 46px; } body.m.ipad li.mini .t, body.m.ipad li.mini .l { font-size: 14px; }
+
+  /* phone turned sideways: the iPad layout, compact enough to fit the short screen */
+  body.m.ipad.short .top { padding: 6px 16px; } body.m.ipad.short .top img { width: 20px; height: 20px; } body.m.ipad.short .top .svc { font-size: 15px; }
+  body.m.ipad.short .layout { padding: 2px 16px 8px; gap: 8px 18px; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+  body.m.ipad.short .clock, body.m.ipad.short .v, body.m.ipad.short .mpct { font-size: 24px; } body.m.ipad.short .k { font-size: 11px; }
+  body.m.ipad.short li.now { padding: 10px 14px 12px; margin: 2px 0 0; }
+  body.m.ipad.short .now h2 { font-size: 16px; } body.m.ipad.short .now .started { font-size: 12px; }
+  body.m.ipad.short .now .big { font-size: 34px; margin-top: 4px; } body.m.ipad.short .now .big small { font-size: 16px; }
+  body.m.ipad.short .now .line { font-size: 14px; }
+  body.m.ipad.short .tl { margin: 14px 0 24px; height: 8px; } body.m.ipad.short .tl .mk { height: 20px; top: -6px; } body.m.ipad.short .tl .ml { top: 16px; font-size: 12px; }
+  body.m.ipad.short .now .r2 { font-size: 13px; gap: 4px 16px; }
+  body.m.ipad.short li.next { padding: 8px 4px 2px; } body.m.ipad.short li.next .nt { font-size: 17px; } body.m.ipad.short li.next .nm, body.m.ipad.short li.next .k2 { font-size: 12px; }
+  body.m.ipad.short li.then { display: none; }
+  body.m.ipad.short li.mini { font-size: 13px; padding: 4px; grid-template-columns: 42px 1fr 38px; } body.m.ipad.short li.mini .t, body.m.ipad.short li.mini .l { font-size: 12px; }
+  body.m.ipad.short li.hdr { padding: 8px 4px 0; font-size: 11px; }
+  body.m.ipad.short .foot { display: none; }
+
+  /* TV (/tv): one 16:9 screen read from across the room, sized in vw so it fits any TV */
+  #tv { display: none; }
+  body.tv { overflow: hidden; cursor: none; }
+  body.tv .top, body.tv .layout, body.tv .foot { display: none; }
+  body.tv #tv { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100vh; padding: 2.2vw 3vw 2vw; gap: 1.6vw; }
+  .tvtop { display: flex; align-items: baseline; gap: 1.6vw; font-size: 1.7vw; color: var(--mute); }
+  .tvtop b { color: var(--text); font-weight: 650; font-size: 2.1vw; } .tvtop .sp { flex: 1; }
+  .tvtop .tvclock { color: var(--text); font-size: 3.4vw; font-weight: 300; letter-spacing: -.1vw; }
+  .tvmain { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); gap: 2.6vw; min-height: 0; }
+  .tvnow { background: var(--panel); border-left: .4vw solid var(--acc); border-radius: 1vw; padding: 2vw 2.4vw; display: flex; flex-direction: column; min-height: 0; }
+  .tvnow .lbl { color: var(--mute); font-size: 1.4vw; }
+  .tvnow h1 { font-size: 3.4vw; font-weight: 650; line-height: 1.1; margin-top: .3vw; }
+  .tvnow .who { font-size: 2.4vw; margin-left: 1vw; }
+  .tvnow .huge { font-size: 8.5vw; font-weight: 700; letter-spacing: -.3vw; line-height: 1; margin-top: auto; }
+  .tvnow .huge small { font-size: 3.6vw; color: var(--mute); font-weight: 500; letter-spacing: 0; }
+  .tvnow .line { font-size: 2vw; color: var(--mute); margin-top: .8vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tvnow .tl { height: 1.1vw; border-radius: .6vw; margin: 2.6vw 0 3vw; }
+  .tvnow .tl .fill { border-radius: .6vw; } .tvnow .tl .mk { top: -.9vw; height: 2.9vw; width: .2vw; }
+  .tvnow .tl .ml { top: 2.3vw; font-size: 1.5vw; }
+  .tvnow .stats { display: flex; gap: 3vw; font-size: 1.7vw; color: var(--mute); }
+  .tvnow .stats b { color: var(--text); font-weight: 600; }
+  .tvside { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 1.8vw; min-height: 0; }
+  .tvstat .k { margin: 0; font-size: 1.5vw; } .tvstat .v { font-size: 5vw; font-weight: 650; letter-spacing: -.15vw; line-height: 1.05; }
+  .tvstat .sm { font-size: 1.3vw; }
+  .tvnext { border-top: .1vw solid var(--line); padding-top: 1.4vw; min-height: 0; overflow: hidden; }
+  .tvnext .k { margin: 0; font-size: 1.5vw; }
+  .tvnext .nt { font-size: 2.6vw; font-weight: 650; line-height: 1.15; margin-top: .3vw; } .tvnext .nt .who { font-size: 1.9vw; }
+  .tvnext .nm { font-size: 1.5vw; color: var(--mute); margin-top: .2vw; }
+  .tvnext .then { display: grid; grid-template-columns: 5.5vw 1fr; font-size: 1.6vw; margin-top: 1vw; color: var(--mute); }
+  .tvnext .then span:last-child { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tvstrip { display: flex; gap: .25vw; height: 1vw; }
+  .tvstrip div { background: var(--line); border-radius: .2vw; position: relative; overflow: hidden; }
+  .tvstrip .d { background: #3a4553; } .tvstrip .c { background: #3a4553; } .tvstrip .c i { position: absolute; inset: 0 auto 0 0; background: var(--acc); }
+  .tvfoot { display: flex; justify-content: space-between; font-size: 1.4vw; color: var(--mute); margin-top: .8vw; }
+  .tvwait { margin: auto; font-size: 3vw; color: var(--mute); text-align: center; }
+
+  /* settings */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
+  .sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; width: 100%; max-width: 460px; }
+  .sheet h2 { font-size: 19px; margin-bottom: 4px; }
+  .sheet p { margin-bottom: 12px; color: var(--mute); font-size: 13px; }
+  .sheet label { display: block; font-size: 13px; color: var(--mute); margin: 12px 0 4px; }
+  .sheet input[type=text], .sheet input[type=password], .sheet input[type=number] { width: 100%; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 15px; }
+  .sheet .two { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+  .sheet .chk { display: flex; gap: 8px; align-items: center; margin-top: 14px; font-size: 14px; }
+  .sheet .btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+  .btn { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: #222a35; color: var(--text); cursor: pointer; font-size: 14px; }
+  .btn.primary { background: #2563eb; border-color: #2563eb; }
+  .btn.link { background: none; border: none; color: var(--late); padding: 8px 0 0; }
+  .sheet { max-height: calc(100vh - 32px); overflow-y: auto; }
+  .sheet h3 { font-size: 15px; margin: 18px 0 2px; } .sheet h3 .opt { color: var(--mute); font-weight: 400; font-size: 13px; }
+  .sheet .help { font-size: 13px; color: var(--mute); margin: 2px 0 4px; } .sheet .help b { color: var(--text); font-weight: 500; }
+  .sheet select { width: 100%; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 15px; }
+  :focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <img src="/icon.png" alt="">
+  <span class="svc" id="svc">Service</span>
+  <span class="series" id="series"></span>
+  <span class="demo hidden" id="demo">Demo data</span>
+  <span class="sp"></span>
+  <span class="st" id="pp">ProPresenter</span>
+  <span class="st" id="pco">Planning Center</span>
+  <button class="dbtn" id="dbtn" onclick="openDisplay()" title="What this screen shows">Display</button>
+  <button class="gear hidden" id="gear" onclick="openSettings()">Settings</button>
+</header>
+
+<div class="layout">
+  <div class="order" id="order">
+    <div class="seg" role="tablist"><button id="seg-now" role="tab" onclick="setView('now')">Now</button><button id="seg-all" role="tab" onclick="setView('all')">Full order</button></div>
+    <ol id="list"><li class="wait">Connecting…</li></ol></div>
+  <ol id="list2"></ol>
+  <aside>
+    <div><div class="clock" id="clock">--:--</div></div>
+    <div><div class="k">Vs plan</div><div class="v" id="drift">—</div><div class="sm" id="ends"></div></div>
+    <div><div class="k" id="mtlabel">Message timer</div><div class="v" id="mtimer">—</div><div class="sm" id="target"></div></div>
+    <div class="corner"><div class="k">Message</div><div class="mpct" id="mpct">—</div></div>
+  </aside>
+</div>
+<div class="foot"><span id="upd" class="hidden"></span><span id="phone"></span><span id="pconote"></span><span class="err" id="err"></span></div>
+
+<div id="tv">
+  <div class="tvtop"><b id="tvsvc">Service</b><span id="tvseries"></span><span class="sp"></span><span class="tvclock" id="tvclock">--:--</span></div>
+  <div class="tvmain">
+    <section class="tvnow" id="tvnow"><div class="tvwait">Waiting for ProPresenter…</div></section>
+    <div class="tvside">
+      <div class="tvstat"><div class="k">Vs plan</div><div class="v" id="tvdrift">—</div><div class="sm" id="tvends"></div></div>
+      <div class="tvstat"><div class="k" id="tvmtl">Message timer</div><div class="v" id="tvtimer">—</div><div class="sm" id="tvtarget"></div></div>
+      <div class="tvnext" id="tvnext"></div>
+    </div>
+  </div>
+  <div><div class="tvstrip" id="tvstrip"></div><div class="tvfoot"><span id="tvdone"></span><span id="tvmpct"></span></div></div>
+</div>
+
+<div class="modal hidden" id="dmodal" onclick="if (event.target === this) this.classList.add('hidden')">
+  <div class="sheet">
+    <h2>Display</h2>
+    <p>Just for this screen — each phone, iPad and computer keeps its own.</p>
+    <label class="tog"><span>Section headers<small>Worship, Message, Closing… from Planning Center</small></span><input type="checkbox" id="p_headers" onchange="setPref('headers', this.checked)"></label>
+    <label class="tog"><span>Singers and notes<small>Item descriptions, like the lead singer</small></span><input type="checkbox" id="p_people" onchange="setPref('people', this.checked)"></label>
+    <label class="tog"><span>Item lengths</span><input type="checkbox" id="p_lengths" onchange="setPref('lengths', this.checked)"></label>
+    <label class="tog"><span>Seconds on the clock</span><input type="checkbox" id="p_seconds" onchange="setPref('seconds', this.checked)"></label>
+    <label for="p_size">Text size</label>
+    <select id="p_size" onchange="setPref('size', this.value)"><option value="m">Normal</option><option value="l">Large</option><option value="xl">Extra large</option></select>
+    <div class="btns"><button type="button" class="btn primary" onclick="$('dmodal').classList.add('hidden')">Done</button></div>
+  </div>
+</div>
+
+<div class="modal hidden" id="modal">
+  <form class="sheet" onsubmit="saveSettings(event)">
+    <h2 id="s_title">Settings</h2>
+    <p id="s_intro">Only editable on this computer. Phones on the same network can open the address at the bottom of the screen.</p>
+    <h3>ProPresenter</h3>
+    <p class="help">In ProPresenter: Settings → Network → turn on Enable Network and copy the port here. If ProPresenter runs on another computer, enter its IP address.</p>
+    <div class="two">
+      <div><label for="s_host">Computer</label><input type="text" id="s_host" placeholder="127.0.0.1 (this Mac)"></div>
+      <div><label for="s_port">Port</label><input type="number" id="s_port" placeholder="51476"></div>
+    </div>
+    <h3>Planning Center <span class="opt">optional — adds your order of service and times</span></h3>
+    <p class="help">At <b>api.planningcenteronline.com/oauth/applications</b>, under Personal Access Tokens, create a token and paste its Application ID and Secret. It stays on this computer and is only used to read your plans.</p>
+    <label for="s_app">Application ID</label>
+    <input type="text" id="s_app" autocomplete="off" spellcheck="false">
+    <label for="s_secret">Secret</label>
+    <input type="password" id="s_secret" autocomplete="off" placeholder="">
+    <label for="s_st">Service type</label>
+    <select id="s_st"><option value="">Automatic — whichever has a plan today</option></select>
+    <button type="button" class="btn link" onclick="clearPco()">Remove Planning Center token</button>
+    <h3>Message timer</h3>
+    <select id="s_timer"><option value="">Automatic — a timer named Message or Sermon</option></select>
+    <p class="help" id="s_opts_err"></p>
+    <h3>App</h3>
+    <p class="help" id="s_ver">Version —</p>
+    <div class="chk"><input type="checkbox" id="s_demo"><label for="s_demo" style="margin:0">Demo mode (fake data, for trying it out)</label></div>
+    <div class="btns"><button type="button" class="btn" onclick="closeSettings()">Cancel</button><button class="btn primary">Save</button></div>
+  </form>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => (s ?? '').toString().replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const mmss = s => { if (s == null) return ''; const neg = s < 0; s = Math.abs(Math.round(s)); return (neg ? '-' : '') + Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); };
+const shortTimer = t => (t || '').replace(/^(-?)00:/, '$1').replace(/^(-?)0(\d:)/, '$1$2');
+const pretty = t => (t || '').replace(/\s*:\s*/, ' · ');       // "Message: P. Jay Miller" -> "Message · P. Jay Miller"
+let lastCur = null, lastState = null, setupShown = false, lastUpdate = null;
+// ---- display settings: per device (saved in this browser), so each phone, iPad and TV can differ.
+// The TV has no buttons, so it also reads them from its address: /tv?headers=1&size=l&people=0
+const PREF_DEFAULTS = { headers: false, people: true, lengths: true, seconds: true, size: 'm' };
+let prefs = { ...PREF_DEFAULTS };
+try { prefs = { ...prefs, ...JSON.parse(localStorage.getItem('ss_prefs') || '{}') }; } catch (e) {}
+{ const q = new URLSearchParams(location.search);
+  for (const k of ['headers', 'people', 'lengths', 'seconds']) if (q.has(k)) prefs[k] = q.get(k) !== '0';
+  if (q.has('size')) prefs.size = q.get('size'); }
+function applyPrefs() {
+  const b = document.body.classList;
+  b.toggle('no-people', !prefs.people); b.toggle('no-lengths', !prefs.lengths); b.toggle('no-seconds', !prefs.seconds);
+  b.toggle('size-l', prefs.size === 'l'); b.toggle('size-xl', prefs.size === 'xl');
+}
+function savePrefs() { try { localStorage.setItem('ss_prefs', JSON.stringify(prefs)); } catch (e) {} applyPrefs(); if (lastState) render(lastState); }
+function openDisplay() {
+  for (const k of ['headers', 'people', 'lengths', 'seconds']) $('p_' + k).checked = !!prefs[k];
+  $('p_size').value = prefs.size; $('dmodal').classList.remove('hidden');
+}
+function setPref(k, v) { prefs[k] = v; savePrefs(); }
+// mark each item with the section header above it in Planning Center
+function withSections(s) {
+  let sec = '';
+  for (const r of s.rundown || []) { if (r.type === 'header') sec = (r.title || '').trim(); else r._sec = sec; }
+}
+const hdr = (r, prev) => prefs.headers && r._sec && (!prev || prev._sec !== r._sec) ? '<li class="hdr">' + esc(r._sec) + '</li>' : '';
+function updAction(a) { fetch('/api/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: a }) }); }
+function showVersion() {
+  const u = lastUpdate; if (!u) { $('s_ver').textContent = ''; return; }
+  const st = { current: 'Up to date', checking: 'Checking for updates…', downloading: 'Downloading update…', idle: '',
+    ready: 'Update ' + u.ready + ' downloaded — restart to use it', reinstall: 'Version ' + u.latest + ' needs the new installer',
+    error: 'Couldn’t check for updates' }[u.status] || '';
+  const html = 'Version ' + esc(u.running) + (st ? ' · ' + esc(st) : '') +
+    (u.status === 'ready' ? '<button type="button" class="linkbtn" onclick="updAction(\'restart\')">Restart now</button>'
+                          : '<button type="button" class="linkbtn" onclick="updAction(\'check\')">Check now</button>');
+  if ($('s_ver').innerHTML !== html) $('s_ver').innerHTML = html;
+}
+// /tv = TV, /mobile = phone/iPad; the plain address also switches to the phone/iPad layout on touch screens
+const MODE = /^\/tv/.test(location.pathname) ? 'tv'
+  : (/^\/(mobile|m)\b/.test(location.pathname) || window.matchMedia('(pointer: coarse)').matches) ? 'mobile' : 'desk';
+const narrow = window.matchMedia('(max-width: 820px)');
+const phone = { get matches() { return MODE === 'mobile' || narrow.matches; } };
+function setMode() {
+  document.body.classList.toggle('tv', MODE === 'tv');
+  document.body.classList.toggle('m', MODE === 'mobile' || narrow.matches);
+  document.body.classList.toggle('ipad', MODE === 'mobile' && window.innerWidth >= 700);
+  document.body.classList.toggle('short', MODE === 'mobile' && window.innerWidth >= 700 && window.innerHeight < 560);   // phone turned sideways
+}
+applyPrefs(); setMode(); window.addEventListener('resize', () => { setMode(); if (lastState) render(lastState); });
+if (MODE === 'tv' && navigator.wakeLock) {           // keep the TV's browser from sleeping
+  const lock = () => navigator.wakeLock.request('screen').catch(() => {});
+  lock(); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') lock(); });
+}
+let view = 'now'; try { view = localStorage.getItem('tfc_view') || 'now'; } catch (e) {}
+function setView(v) { view = v; try { localStorage.setItem('tfc_view', v); } catch (e) {} if (lastState) render(lastState); }
+const tcls = r => r.actual ? '' : (r.proj_late == null ? '' : (r.proj_late >= 120 ? 'late' : (r.proj_late <= -120 ? 'early' : '')));
+// phone: just what's on now, what's next, and the two after that
+function nowNext(s, rows, cur) {
+  let h = cur >= 0 ? '<li class="now" id="nowli">' + nowPanel(s, rows[cur]) + '</li>' : ((s.message || s.deck) ? '<li class="now">' + nowPanel(s, null) + '</li>' : '<li class="wait">Nothing up yet</li>');
+  const up = rows.slice(cur + 1).filter(r => r.planned || r.proj);
+  const n = up[0];
+  if (n) h += '<li class="next"><div class="k2">Next' + (prefs.headers && n._sec && n._sec !== (rows[cur] && rows[cur]._sec) ? ' · <span style="color:var(--acc)">' + esc(n._sec) + '</span>' : '') + (n.proj || n.planned ? ' at <span class="' + tcls(n) + '">' + esc(n.proj || n.planned) + '</span>' : '') + '</div>' +
+              '<div class="nt">' + esc(n.title.replace(/:.*$/, '')) + (n.desc || /:/.test(n.title) ? '<span class="who">' + esc(n.desc || n.title.replace(/^[^:]*:\s*/, '')) + '</span>' : '') + '</div>' +
+              (n.length ? '<div class="nm">' + mmss(n.length) + ' planned</div>' : '') + '</li>';
+  up.slice(1, 3).forEach(r => { h += '<li class="then"><span class="t ' + tcls(r) + '">' + esc(r.proj || r.planned || '') + '</span><span>' + esc(r.title.replace(/:.*$/, '')) +
+      (r.desc || /:/.test(r.title) ? '<span class="who">' + esc(r.desc || r.title.replace(/^[^:]*:\s*/, '')) + '</span>' : '') + '</span><span class="l">' + (r.length ? mmss(r.length) : '') + '</span></li>'; });
+  return h;
+}
+// phone: the whole order on one screen, one line each
+function miniOrder(rows, cur) {
+  return rows.map((r, i) => hdr(r, rows[i - 1]) + '<li class="mini' + (i === cur ? ' cur' : (cur >= 0 && i < cur ? ' done' : '')) + '"><span class="t ' + tcls(r) + '">' +
+    esc(r.actual || r.proj || r.planned || '') + '</span><span>' + esc(r.title.replace(/:.*$/, '')) + (r.desc ? '<span class="who">' + esc(r.desc) + '</span>' : '') +
+    '</span><span class="l">' + (r.length ? mmss(r.length) : '') + '</span></li>').join('');
+}
+
+function timeline(pct, marks, onIdx, over) {
+  let h = '<div class="tl"><div class="fill' + (over ? ' over' : '') + '" style="width:' + Math.max(0, Math.min(100, pct)).toFixed(1) + '%"></div>';
+  (marks || []).forEach((m, i) => {
+    h += '<div class="mk" style="left:calc(' + m.at.toFixed(1) + '% - 1px)"></div>' +
+         '<div class="ml' + (i === onIdx ? ' on' : '') + '" style="left:' + m.at.toFixed(1) + '%">' + esc(m.label) + '</div>';
+  });
+  return h + '</div>';
+}
+
+function nowPanel(s, r) {
+  const m = s.message, d = s.deck;
+  const title = r ? r.title : (m ? m.name : (s.current_item || ''));
+  const who = r && r.desc ? '<span class="who">' + esc(r.desc) + '</span>' : '';
+  let h = '<div class="r1"><h2>' + esc(pretty(title)) + who + '</h2><span class="started">' + (s.current_item_started ? 'started ' + esc(s.current_item_started) : '') + (s.match === 'guess' ? ' · matched by order' : '') + '</span></div>';
+  if (m) {
+    const marks = m.points.map(p => ({ at: p.at, label: p.label.replace(/^Point\s*/i, '') }));
+    let on = -1; marks.forEach((p, i) => { if (m.pct >= p.at - 0.01) on = i; });
+    const head = m.point_now ? m.point_now + (m.point_count ? ' <small>of ' + m.point_count + '</small>' : '') : (m.index < 4 ? 'Intro' : 'Before Point 1');
+    h += '<div class="big">' + head + '</div>';
+    if (m.current_text) h += '<div class="line">' + esc(m.current_text.split('\n')[0]) + '</div>';
+    h += timeline(m.pct, marks, on, false);
+    const pc = m.pace_secs == null ? '' : (m.pace_secs > 60 ? 'late' : 'good');
+    h += '<div class="r2"><span>Finish <b class="' + pc + '">' + esc(m.projected_finish || 'reading pace…') + '</b></span>' +
+         (m.pace ? '<span>Pace <b class="' + pc + '">' + esc(m.pace) + '</b></span>' : '') +
+         '<span>Slide <b>' + ((m.index ?? 0) + 1) + '/' + m.count + '</b></span>' +
+         '<span>In message <b>' + esc(m.elapsed || '—') + '</b></span></div>';
+  } else if (d) {
+    let on = -1; d.marks.forEach((p, i) => { if (d.pct >= p.at - 0.01) on = i; });
+    const len = s.current_item_len_s ? ' <small>' + mmss(s.current_item_el_s) + ' of ' + mmss(s.current_item_len_s) + '</small>' : '';
+    h += '<div class="big">' + esc(d.section || d.name) + len + '</div>';
+    h += timeline(d.pct, d.marks, on, false);
+    h += '<div class="r2"><span>Slide <b>' + (d.index + 1) + '/' + d.count + '</b></span>' +
+         (s.current_item_len_s ? '<span>Planned <b>' + mmss(s.current_item_len_s) + '</b></span>' : '') + '</div>';
+  } else {
+    const el = s.current_item_el_s, len = s.current_item_len_s;
+    h += '<div class="big">' + (el != null ? mmss(el) : '—') + (len ? ' <small>of ' + mmss(len) + '</small>' : '') + '</div>';
+    if (len) h += timeline(100 * el / len, [], -1, el > len);
+  }
+  return h;
+}
+
+function render(s) {
+  lastState = s;
+  if (MODE === 'tv') return renderTV(s);
+  const cm = (s.now || '').replace(/\s?[AP]M$/i, '').match(/^(\d+:\d\d)(:\d\d)?/);
+  $('clock').innerHTML = cm ? cm[1] + '<span class="sec">' + (cm[2] || '') + '</span>' : '--:--';
+  $('svc').textContent = s.service ? s.service + ' Service' : 'Service';
+  $('series').textContent = s.pco?.items_matched === false || s.pco?.note ? (s.playlist || '') : [s.pco?.service_type, s.pco?.title || s.pco?.series].filter(Boolean).join(' — ');
+  $('mtlabel').textContent = s.message_timer_label || 'Message timer';
+  if (s.setup_needed && !setupShown) { setupShown = true; openSettings(true); }
+  $('pp').className = 'st ' + (s.pp?.ok ? 'ok' : 'bad');
+  $('pco').className = 'st ' + (s.pco?.enabled && !s.pco?.error ? 'ok' : (s.pco?.enabled ? 'bad' : ''));
+  $('pco').textContent = s.pco?.enabled ? 'Planning Center' : 'Planning Center off';
+  $('demo').classList.toggle('hidden', !s.demo);
+  $('gear').classList.toggle('hidden', !s.can_edit);
+  $('err').textContent = [s.fatal, s.demo ? '' : s.pp?.error, s.pco?.error].filter(Boolean).join(' · ');
+  $('pconote').textContent = s.pco?.note || '';
+  const u = s.update; lastUpdate = u;
+  const showUpd = u && (u.status === 'ready' || u.status === 'reinstall');
+  $('upd').classList.toggle('hidden', !showUpd);
+  if (showUpd) $('upd').innerHTML = u.status === 'ready'
+    ? 'Update ' + esc(u.ready) + ' is ready <button onclick="updAction(\'restart\')">Restart to update</button>'
+    : 'Version ' + esc(u.latest) + ' needs the new installer <button onclick="updAction(\'installer\')">Get it</button>';
+  if (!$('modal').classList.contains('hidden')) showVersion();
+  $('phone').innerHTML = (s.urls && s.urls.length) ? 'Phones &amp; iPads: <b>' + esc(s.urls[0]) + '/mobile</b> · TV: <b>' + esc(s.urls[0]) + '/tv</b>' : '';
+
+  // right column
+  const d = $('drift');
+  d.textContent = s.drift ?? '—';
+  d.className = 'v ' + (s.drift_secs == null ? '' : (s.drift_secs > 60 ? 'late' : 'good'));
+  $('ends').textContent = s.service_end_projected ? 'Ends ' + s.service_end_projected + ' · planned ' + (s.service_end_planned || '') :
+                          (s.service_end_planned ? 'Planned end ' + s.service_end_planned : '');
+  const mt = s.message_timer, t = $('mtimer');
+  t.textContent = mt ? (shortTimer(mt.time) || '—') : '—';
+  t.className = 'v' + (mt && /^-/.test(mt.time || '') ? ' over' : '');
+  $('target').textContent = s.timer_target ? 'Runs out ' + s.timer_target : '';
+  $('mpct').textContent = s.message_pct == null ? 'Not started' : Math.round(s.message_pct) + '%';
+  $('mpct').className = 'mpct' + (s.message_pct == null ? ' none' : '');
+
+  // running order
+  withSections(s);
+  const rows = (s.rundown || []).filter(r => r.type !== 'header');
+  let html = '', curIdx = -1;
+  rows.forEach((r, i) => { if (r.current) curIdx = i; });
+  rows.forEach((r, i) => {
+    html += hdr(r, rows[i - 1]);
+    if (i === curIdx) { html += '<li class="now" id="nowli">' + nowPanel(s, r) + '</li>'; return; }
+    const done = curIdx >= 0 && i < curIdx;
+    const tm = r.actual || r.proj || r.planned || '';
+    const tc = r.actual ? '' : (r.proj_late == null ? '' : (r.proj_late >= 120 ? 'late' : (r.proj_late <= -120 ? 'early' : '')));
+    html += '<li class="row' + (done ? ' done' : '') + '"><span class="t ' + tc + '"' + (r.planned ? ' title="Planned ' + esc(r.planned) + '"' : '') + '>' + esc(tm) +
+            '</span><span>' + esc(r.title) + (r.desc ? '<span class="who">' + esc(r.desc) + '</span>' : '') +
+            '</span><span class="l">' + (r.length ? mmss(r.length) : '') + '</span></li>';
+  });
+  if (curIdx < 0 && (s.message || s.deck)) html = '<li class="now">' + nowPanel(s, null) + '</li>' + html;
+  if (phone.matches && rows.length) html = (view === 'all' && !document.body.classList.contains('ipad')) ? miniOrder(rows, curIdx) : nowNext(s, rows, curIdx);
+  if (document.body.classList.contains('ipad')) $('list2').innerHTML = rows.length ? miniOrder(rows, curIdx) : '';
+  $('seg-now').className = view === 'now' ? 'on' : ''; $('seg-all').className = view === 'all' ? 'on' : '';
+  if (!html) html = '<li class="wait">Waiting for ProPresenter' + (s.pco?.enabled ? '' : ' (add Planning Center in Settings to see the order of service)') + '</li>';
+  $('list').innerHTML = html;
+  if (curIdx !== lastCur) {
+    lastCur = curIdx;
+    const li = $('nowli'), box = $('order');
+    if (li) box.scrollTo({ top: Math.max(0, li.offsetTop - box.offsetTop - box.clientHeight * 0.25), behavior: 'smooth' });
+  }
+}
+
+// ---------------------------------------------------------------- TV
+function renderTV(s) {
+  const cm = (s.now || '').replace(/\s?[AP]M$/i, '').match(/^(\d+:\d\d)/);
+  $('tvclock').textContent = cm ? cm[1] : '--:--';
+  $('tvsvc').textContent = s.service ? s.service + ' Service' : 'Service';
+  $('tvseries').textContent = s.pco?.note ? (s.playlist || '') : [s.pco?.title || s.pco?.series].filter(Boolean).join('');
+  const d = $('tvdrift'); d.textContent = s.drift ?? '—';
+  d.className = 'v ' + (s.drift_secs == null ? '' : (s.drift_secs > 60 ? 'late' : 'good'));
+  $('tvends').textContent = s.service_end_projected ? 'Ends ' + s.service_end_projected + ' · planned ' + (s.service_end_planned || '') : '';
+  const mt = s.message_timer, t = $('tvtimer');
+  $('tvmtl').textContent = s.message_timer_label || 'Message timer';
+  t.textContent = mt ? (shortTimer(mt.time) || '—') : '—';
+  t.className = 'v' + (mt && /^-/.test(mt.time || '') ? ' over' : '');
+  $('tvtarget').textContent = s.timer_target ? 'Runs out ' + s.timer_target : '';
+  $('tvmpct').textContent = s.message_pct == null ? '' : 'Message ' + Math.round(s.message_pct) + '%';
+
+  withSections(s);
+  const rows = (s.rundown || []).filter(r => r.type !== 'header');
+  let cur = rows.findIndex(r => r.current);
+  const r = cur >= 0 ? rows[cur] : null, m = s.message, dk = s.deck;
+  // now
+  let h = '';
+  if (!r && !m && !dk) h = '<div class="tvwait">' + (s.pp?.ok ? 'Nothing up yet' : 'Waiting for ProPresenter…') + '</div>';
+  else {
+    const title = r ? r.title : (m ? m.name : (s.current_item || ''));
+    h += '<div class="lbl">Now' + (prefs.headers && r && r._sec ? ' · <span class="sec">' + esc(r._sec) + '</span>' : '') + (s.current_item_started ? ' · started ' + esc(s.current_item_started) : '') + '</div>';
+    h += '<h1>' + esc(pretty(title)) + (r && r.desc ? '<span class="who">' + esc(r.desc) + '</span>' : '') + '</h1>';
+    if (m) {
+      const marks = m.points.map(p => ({ at: p.at, label: p.label.replace(/^Point\s*/i, '') }));
+      let on = -1; marks.forEach((p, i) => { if (m.pct >= p.at - 0.01) on = i; });
+      h += '<div class="huge">' + (m.point_now ? m.point_now + (m.point_count ? ' <small>of ' + m.point_count + '</small>' : '') : (m.index < 4 ? 'Intro' : 'Before Point 1')) + '</div>';
+      if (m.current_text) h += '<div class="line">' + esc(m.current_text.split('\n')[0]) + '</div>';
+      h += timeline(m.pct, marks, on, false);
+      const pc = m.pace_secs == null ? '' : (m.pace_secs > 60 ? 'late' : 'good');
+      h += '<div class="stats"><span><b>' + Math.round(m.pct) + '%</b> through</span><span>Finish <b class="' + pc + '">' + esc(m.projected_finish || '…') + '</b></span>' +
+           (m.pace ? '<span>Pace <b class="' + pc + '">' + esc(m.pace) + '</b></span>' : '') + '</div>';
+    } else if (dk) {
+      let on = -1; dk.marks.forEach((p, i) => { if (dk.pct >= p.at - 0.01) on = i; });
+      h += '<div class="huge">' + esc(dk.section || dk.name) + '</div>';
+      h += timeline(dk.pct, dk.marks, on, false);
+      h += '<div class="stats">' + (s.current_item_len_s ? '<span><b>' + mmss(s.current_item_el_s) + '</b> of ' + mmss(s.current_item_len_s) + '</span>' : '') +
+           '<span>Slide <b>' + (dk.index + 1) + '/' + dk.count + '</b></span></div>';
+    } else {
+      const el = s.current_item_el_s, len = s.current_item_len_s;
+      h += '<div class="huge">' + (el != null ? mmss(el) : '—') + (len ? ' <small>of ' + mmss(len) + '</small>' : '') + '</div>';
+      h += len ? timeline(100 * el / len, [], -1, el > len) : '';
+    }
+  }
+  $('tvnow').innerHTML = h;
+  // next + the two after
+  const up = rows.slice(cur + 1).filter(x => x.planned || x.proj);
+  let n = '';
+  if (up[0]) {
+    const x = up[0], who = x.desc || (/:/.test(x.title) ? x.title.replace(/^[^:]*:\s*/, '') : '');
+    n += '<div class="k">Next' + (prefs.headers && x._sec && x._sec !== (r && r._sec) ? ' · <span class="sec">' + esc(x._sec) + '</span>' : '') + (x.proj || x.planned ? ' at <span class="' + tcls(x) + '">' + esc(x.proj || x.planned) + '</span>' : '') + '</div>' +
+         '<div class="nt">' + esc(x.title.replace(/:.*$/, '')) + (who ? '<span class="who">' + esc(who) + '</span>' : '') + '</div>' +
+         (x.length ? '<div class="nm">' + mmss(x.length) + ' planned</div>' : '');
+    up.slice(1, 3).forEach(y => { n += '<div class="then"><span class="' + tcls(y) + '">' + esc(y.proj || y.planned || '') + '</span><span>' + esc(y.title.replace(/:.*$/, '')) + '</span></div>'; });
+  }
+  $('tvnext').innerHTML = n;
+  // the whole service as a strip
+  const tl = rows.filter(x => x.planned_ts || x.planned);
+  let st = '';
+  tl.forEach(x => {
+    const i = rows.indexOf(x), w = Math.max(x.length || 0, 20);
+    if (i === cur) { const f = x.length ? Math.min(100, 100 * (s.current_item_el_s || 0) / x.length) : 50; st += '<div class="c" style="flex:' + w + '"><i style="width:' + f.toFixed(1) + '%"></i></div>'; }
+    else st += '<div class="' + (cur >= 0 && i < cur ? 'd' : '') + '" style="flex:' + w + '"></div>';
+  });
+  $('tvstrip').innerHTML = st;
+  const left = tl.filter(x => rows.indexOf(x) > cur).length;
+  $('tvdone').textContent = cur >= 0 ? (left ? left + ' item' + (left > 1 ? 's' : '') + ' after this' : 'Last item') : '';
+}
+
+async function tick() {
+  try { const r = await fetch('/api/state', {cache: 'no-store'}); render(await r.json()); }
+  catch (e) { $('err').textContent = 'Lost connection to the status app'; }
+}
+tick(); setInterval(tick, 1000);
+
+async function openSettings(first) {
+  const r = await fetch('/api/settings'); if (!r.ok) return;
+  const c = await r.json();
+  $('s_title').textContent = first ? 'Welcome — set up Service Status' : 'Settings';
+  $('s_host').value = c.pp_host; $('s_port').value = c.pp_port; $('s_app').value = c.pco_app_id || '';
+  $('s_secret').value = ''; $('s_secret').placeholder = c.pco_secret_set ? 'saved — leave blank to keep' : '';
+  $('s_demo').checked = !!c.demo; $('modal').classList.remove('hidden');
+  showVersion(); fillOptions(c);
+}
+async function fillOptions(c) {       // service types from their Planning Center, timers from their ProPresenter
+  try {
+    const o = await (await fetch('/api/options')).json();
+    const st = $('s_st'), tm = $('s_timer');
+    st.length = 1; (o.service_types || []).forEach(t => st.add(new Option(t.name, t.id)));
+    st.value = c.pco_service_type_id ? String(c.pco_service_type_id) : '';
+    tm.length = 1; (o.timers || []).forEach(n => tm.add(new Option(n, n)));
+    if (c.message_timer_name && ![...tm.options].some(x => x.value === c.message_timer_name)) tm.add(new Option(c.message_timer_name, c.message_timer_name));
+    tm.value = c.message_timer_name || '';
+    $('s_opts_err').textContent = [o.pp_error ? 'ProPresenter not reachable yet — timers will list once it is.' : '',
+      o.pco_error ? 'Planning Center: ' + o.pco_error : ''].filter(Boolean).join(' ');
+  } catch (e) {}
+}
+function closeSettings() { $('modal').classList.add('hidden'); }
+async function saveSettings(e) {
+  e.preventDefault();
+  await fetch('/api/settings', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({
+    pp_host: $('s_host').value.trim() || '127.0.0.1', pp_port: $('s_port').value, pco_app_id: $('s_app').value.trim(),
+    pco_secret: $('s_secret').value.trim(), pco_service_type_id: $('s_st').value || null, message_timer_name: $('s_timer').value,
+    demo: $('s_demo').checked }) });
+  closeSettings();
+}
+async function clearPco() {
+  await fetch('/api/settings', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ clear_pco: true }) });
+  $('s_app').value = ''; $('s_secret').value = ''; $('s_secret').placeholder = '';
+}
+</script>
+</body>
+</html>

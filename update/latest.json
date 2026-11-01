@@ -1,15 +1,15 @@
 {
-  "version": "2.0.5",
+  "version": "2.0.6",
   "min_shell": "2.0.0",
-  "notes": "Display settings on every screen (section headers, singers/notes, item lengths, clock seconds, text size); sideways phones use a compact iPad layout; phones and iPads get the mobile layout from any address.",
+  "notes": "iPhone/iPad home-screen app: keeps the header and buttons clear of the Dynamic Island / notch and the home bar.",
   "files": {
     "server.js": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.5/server.js",
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.6/server.js",
       "sha256": "9f3fe4cc315b280dd4c904b5221c4882fd053b0383c21e3dd4921074364dae92"
     },
     "index.html": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.5/index.html",
-      "sha256": "6710b491bc0f1c99369324079fc354adfaffd14f8bb04c07180cc7a9d2ba1b91"
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.6/index.html",
+      "sha256": "052c79d9c4d42b3ffa648c97e280dcbecac7cb0faa5ecfb080cb5e6745ea106c"
     }
   }
 }
