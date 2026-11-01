@@ -1,15 +1,15 @@
 {
-  "version": "2.0.7",
+  "version": "2.0.8",
   "min_shell": "2.0.0",
-  "notes": "Video time left: while a video plays in ProPresenter, the timer spot (and the Now panel) shows the video's time left and when it ends, then switches back to your timer when it stops.",
+  "notes": "Timer spot choice in Display: your timer (and videos), countdown to the next item, only videos, the clock, or nothing.",
   "files": {
     "server.js": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.7/server.js",
-      "sha256": "806b80d924cf63e24e14868d7b4ff0eecda07d9435d80ba02b8c623cae8f767b"
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.8/server.js",
+      "sha256": "cf048a70631b704b53db88bcd2e1b79e9f838f17d19278d53ab34255a21dfd12"
     },
     "index.html": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.7/index.html",
-      "sha256": "c926719cd6c2a2c0a802f25792e630c990048af06f8881b1840f98d138f1d22e"
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.8/index.html",
+      "sha256": "1e558d2785909172567a90f176187371cafdadb1d52ace3329432594c7488c73"
     }
   }
 }

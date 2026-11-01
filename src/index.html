@@ -251,7 +251,7 @@
   <aside>
     <div><div class="clock" id="clock">--:--</div></div>
     <div><div class="k">Vs plan</div><div class="v" id="drift">—</div><div class="sm" id="ends"></div></div>
-    <div><div class="k" id="mtlabel">Message timer</div><div class="v" id="mtimer">—</div><div class="sm" id="target"></div></div>
+    <div id="tslot"><div class="k" id="mtlabel">Message timer</div><div class="v" id="mtimer">—</div><div class="sm" id="target"></div></div>
     <div class="corner"><div class="k">Message</div><div class="mpct" id="mpct">—</div></div>
   </aside>
 </div>
@@ -263,7 +263,7 @@
     <section class="tvnow" id="tvnow"><div class="tvwait">Waiting for ProPresenter…</div></section>
     <div class="tvside">
       <div class="tvstat"><div class="k">Vs plan</div><div class="v" id="tvdrift">—</div><div class="sm" id="tvends"></div></div>
-      <div class="tvstat"><div class="k" id="tvmtl">Message timer</div><div class="v" id="tvtimer">—</div><div class="sm" id="tvtarget"></div></div>
+      <div class="tvstat" id="tvslot"><div class="k" id="tvmtl">Message timer</div><div class="v" id="tvtimer">—</div><div class="sm" id="tvtarget"></div></div>
       <div class="tvnext" id="tvnext"></div>
     </div>
   </div>
@@ -278,6 +278,14 @@
     <label class="tog"><span>Singers and notes<small>Item descriptions, like the lead singer</small></span><input type="checkbox" id="p_people" onchange="setPref('people', this.checked)"></label>
     <label class="tog"><span>Item lengths</span><input type="checkbox" id="p_lengths" onchange="setPref('lengths', this.checked)"></label>
     <label class="tog"><span>Seconds on the clock</span><input type="checkbox" id="p_seconds" onchange="setPref('seconds', this.checked)"></label>
+    <label for="p_timer">Timer spot</label>
+    <select id="p_timer" onchange="setPref('timer', this.value)">
+      <option value="auto">Timer, and videos while they play</option>
+      <option value="next">Countdown to the next item</option>
+      <option value="video">Only videos while they play</option>
+      <option value="clock">Clock</option>
+      <option value="off">Nothing</option>
+    </select>
     <label for="p_size">Text size</label>
     <select id="p_size" onchange="setPref('size', this.value)"><option value="m">Normal</option><option value="l">Large</option><option value="xl">Extra large</option></select>
     <div class="btns"><button type="button" class="btn primary" onclick="$('dmodal').classList.add('hidden')">Done</button></div>
@@ -322,12 +330,13 @@ const pretty = t => (t || '').replace(/\s*:\s*/, ' · ');       // "Message: P. 
 let lastCur = null, lastState = null, setupShown = false, lastUpdate = null;
 // ---- display settings: per device (saved in this browser), so each phone, iPad and TV can differ.
 // The TV has no buttons, so it also reads them from its address: /tv?headers=1&size=l&people=0
-const PREF_DEFAULTS = { headers: false, people: true, lengths: true, seconds: true, size: 'm' };
+const PREF_DEFAULTS = { headers: false, people: true, lengths: true, seconds: true, size: 'm', timer: 'auto' };
 let prefs = { ...PREF_DEFAULTS };
 try { prefs = { ...prefs, ...JSON.parse(localStorage.getItem('ss_prefs') || '{}') }; } catch (e) {}
 { const q = new URLSearchParams(location.search);
   for (const k of ['headers', 'people', 'lengths', 'seconds']) if (q.has(k)) prefs[k] = q.get(k) !== '0';
-  if (q.has('size')) prefs.size = q.get('size'); }
+  if (q.has('size')) prefs.size = q.get('size');
+  if (q.has('timer')) prefs.timer = q.get('timer'); }
 function applyPrefs() {
   const b = document.body.classList;
   b.toggle('no-people', !prefs.people); b.toggle('no-lengths', !prefs.lengths); b.toggle('no-seconds', !prefs.seconds);
@@ -336,7 +345,35 @@ function applyPrefs() {
 function savePrefs() { try { localStorage.setItem('ss_prefs', JSON.stringify(prefs)); } catch (e) {} applyPrefs(); if (lastState) render(lastState); }
 function openDisplay() {
   for (const k of ['headers', 'people', 'lengths', 'seconds']) $('p_' + k).checked = !!prefs[k];
-  $('p_size').value = prefs.size; $('dmodal').classList.remove('hidden');
+  $('p_size').value = prefs.size; $('p_timer').value = prefs.timer || 'auto'; $('dmodal').classList.remove('hidden');
+}
+// What the timer spot shows: the timer (or a video while it plays), only videos, the clock, or nothing.
+function timerSlot(s, slot, label, val, sub) {
+  const mode = prefs.timer || 'auto', vid = s.video, mt = s.message_timer;
+  let show = true;
+  if (vid && mode !== 'clock' && mode !== 'off') {
+    $(label).textContent = 'Video left'; $(val).textContent = mmss(vid.left); $(val).className = 'v vid';
+    $(sub).textContent = (vid.name ? vid.name + ' · ' : '') + 'ends ' + vid.ends;
+  } else if (mode === 'auto') {
+    $(label).textContent = s.message_timer_label || 'Message timer';
+    $(val).textContent = mt ? (shortTimer(mt.time) || '—') : '—';
+    $(val).className = 'v' + (mt && /^-/.test(mt.time || '') ? ' over' : '');
+    $(sub).textContent = s.timer_target ? 'Runs out ' + s.timer_target : '';
+  } else if (mode === 'next') {               // counts down to when the next Planning Center item should start
+    const rows = (s.rundown || []).filter(r => r.type !== 'header');
+    const cur = rows.findIndex(r => r.current);
+    const n = rows.slice(cur + 1).find(r => r.proj_ts || r.planned_ts);
+    if (n) {
+      const at = n.proj_ts || n.planned_ts, left = (at - (s.server_ts || Date.now())) / 1000;
+      $(label).textContent = 'Next: ' + n.title.replace(/:.*$/, '');
+      $(val).textContent = left >= 0 ? mmss(left) : '-' + mmss(-left); $(val).className = 'v' + (left < 0 ? ' over' : '');
+      $(sub).textContent = (n.proj_ts ? 'at ' + n.proj : 'at ' + n.planned) + (n.proj_ts && n.planned && n.proj !== n.planned ? ' · planned ' + n.planned : '');
+    } else show = false;
+  } else if (mode === 'clock') {
+    const c = (s.now || '').match(/^(\d+:\d\d)/);
+    $(label).textContent = 'Time'; $(val).textContent = c ? c[1] : '--:--'; $(val).className = 'v'; $(sub).textContent = '';
+  } else show = false;                        // 'off', or 'video' with nothing playing
+  $(slot).style.visibility = show ? '' : 'hidden';
 }
 function setPref(k, v) { prefs[k] = v; savePrefs(); }
 // mark each item with the section header above it in Planning Center
@@ -448,7 +485,6 @@ function render(s) {
   $('clock').innerHTML = cm ? cm[1] + '<span class="sec">' + (cm[2] || '') + '</span>' : '--:--';
   $('svc').textContent = s.service ? s.service + ' Service' : 'Service';
   $('series').textContent = s.pco?.items_matched === false || s.pco?.note ? (s.playlist || '') : [s.pco?.service_type, s.pco?.title || s.pco?.series].filter(Boolean).join(' — ');
-  $('mtlabel').textContent = s.message_timer_label || 'Message timer';   // replaced below while a video plays
   if (s.setup_needed && !setupShown) { setupShown = true; openSettings(true); }
   $('pp').className = 'st ' + (s.pp?.ok ? 'ok' : 'bad');
   $('pco').className = 'st ' + (s.pco?.enabled && !s.pco?.error ? 'ok' : (s.pco?.enabled ? 'bad' : ''));
@@ -472,15 +508,7 @@ function render(s) {
   d.className = 'v ' + (s.drift_secs == null ? '' : (s.drift_secs > 60 ? 'late' : 'good'));
   $('ends').textContent = s.service_end_projected ? 'Ends ' + s.service_end_projected + ' · planned ' + (s.service_end_planned || '') :
                           (s.service_end_planned ? 'Planned end ' + s.service_end_planned : '');
-  const mt = s.message_timer, t = $('mtimer'), vid = s.video;
-  if (vid) {          // a video is playing: show its time left, then go back to the timer when it stops
-    $('mtlabel').textContent = 'Video left'; t.textContent = mmss(vid.left); t.className = 'v vid';
-    $('target').textContent = (vid.name ? vid.name + ' · ' : '') + 'ends ' + vid.ends;
-  } else {
-    t.textContent = mt ? (shortTimer(mt.time) || '—') : '—';
-    t.className = 'v' + (mt && /^-/.test(mt.time || '') ? ' over' : '');
-    $('target').textContent = s.timer_target ? 'Runs out ' + s.timer_target : '';
-  }
+  timerSlot(s, 'tslot', 'mtlabel', 'mtimer', 'target');
   $('mpct').textContent = s.message_pct == null ? 'Not started' : Math.round(s.message_pct) + '%';
   $('mpct').className = 'mpct' + (s.message_pct == null ? ' none' : '');
 
@@ -521,16 +549,7 @@ function renderTV(s) {
   const d = $('tvdrift'); d.textContent = s.drift ?? '—';
   d.className = 'v ' + (s.drift_secs == null ? '' : (s.drift_secs > 60 ? 'late' : 'good'));
   $('tvends').textContent = s.service_end_projected ? 'Ends ' + s.service_end_projected + ' · planned ' + (s.service_end_planned || '') : '';
-  const mt = s.message_timer, t = $('tvtimer'), vid = s.video;
-  if (vid) {
-    $('tvmtl').textContent = 'Video left'; t.textContent = mmss(vid.left); t.className = 'v vid';
-    $('tvtarget').textContent = (vid.name ? vid.name + ' · ' : '') + 'ends ' + vid.ends;
-  } else {
-    $('tvmtl').textContent = s.message_timer_label || 'Message timer';
-    t.textContent = mt ? (shortTimer(mt.time) || '—') : '—';
-    t.className = 'v' + (mt && /^-/.test(mt.time || '') ? ' over' : '');
-    $('tvtarget').textContent = s.timer_target ? 'Runs out ' + s.timer_target : '';
-  }
+  timerSlot(s, 'tvslot', 'tvmtl', 'tvtimer', 'tvtarget');
   $('tvmpct').textContent = s.message_pct == null ? '' : 'Message ' + Math.round(s.message_pct) + '%';
 
   withSections(s);

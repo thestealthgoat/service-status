@@ -554,7 +554,7 @@ function buildState(cfg, pp, pco, store) {
     else if (!TRACK.done && state.video) t = now + state.video.left * 1000;     // a video ends exactly when its time runs out
     for (let j = curRow + 1; j < rows.length; j++) {
       if (!rows[j].planned_ts) continue;
-      rows[j].proj = hm(t); rows[j].proj_late = Math.round((t - rows[j].planned_ts) / 1000); t += expected(j) * 1000;
+      rows[j].proj = hm(t); rows[j].proj_ts = t; rows[j].proj_late = Math.round((t - rows[j].planned_ts) / 1000); t += expected(j) * 1000;
     }
     if (state.service_end_planned_ts) {
       state.service_end_projected = clock(new Date(t));
@@ -565,6 +565,7 @@ function buildState(cfg, pp, pco, store) {
   }
   rows.forEach((r, i) => { const x = runs.rows[keys[i]]; if (x && x.start && (i < (curRow ?? -1) || (i === curRow))) r.actual = hm(x.start); });
   if (TRACK.done) state.service_done = true;
+  state.server_ts = now;
   state.drift = drift === null ? null : (drift >= 0 ? '+' : '') + fmtSecs(drift);
   state.drift_secs = drift;
   state.rundown = rows.length ? rows : rundown.map(r => ({ title: r.name, type: r.type, current: r.current, planned: null, length: null }));
