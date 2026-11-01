@@ -105,18 +105,25 @@ class PCO {
     if (this.cand && Date.now() - this.cand.at < 900000) return this.cand.list;
     const types = this.auto ? await this.serviceTypes() : [{ id: this.st, name: (this.types?.list || []).find(t => String(t.id) === String(this.st))?.name || null }];
     const now = new Date(), days = new Set([-1, 0, 1].map(k => isoDay(new Date(now.getTime() + k * 86400000))));
-    const list = [];
-    for (const t of types) {
-      for (const [flt, order] of [['future', 'sort_date'], ['past', '-sort_date']]) {
-        let d; try { d = await this.get(`/service_types/${t.id}/plans?filter=${flt}&order=${order}&per_page=3`); } catch (e) { if (/401|403/.test(e.message)) throw e; continue; }
+    const list = [], jobs = [];
+    for (const t of types) for (const [flt, order] of [['future', 'sort_date'], ['past', '-sort_date']]) jobs.push([t, flt, order]);
+    let authErr = null;
+    const worker = async () => {          // 8 at a time instead of one by one (was ~30 s at startup)
+      while (jobs.length) {
+        const [t, flt, order] = jobs.shift();
+        let d; try { d = await this.get(`/service_types/${t.id}/plans?filter=${flt}&order=${order}&per_page=3`); }
+        catch (e) { if (/401|403/.test(e.message)) authErr = e; continue; }
         for (const p of d.data || []) {
           const day = (p.attributes.sort_date || '').slice(0, 10);
           if (days.has(day) && !list.some(x => x.id === p.id))
             list.push({ id: p.id, st: t.id, service_type: t.name, title: p.attributes.title, series: p.attributes.series_title,
-              dates: p.attributes.dates, day, today: day === isoDay(now) });
+              dates: p.attributes.dates, day, today: day === isoDay(now), seq: types.indexOf(t) });
         }
       }
-    }
+    };
+    await Promise.all(Array.from({ length: 8 }, worker));
+    if (authErr && !list.length) throw authErr;
+    list.sort((a, b) => a.seq - b.seq);
     this.cand = { at: Date.now(), list };
     return list;
   }
@@ -165,6 +172,19 @@ class PCO {
       return { error: null, unmatched: true, note: plName ? `“${pp.active_playlist.presentation.playlist.name}” isn't a Planning Center plan today — showing the ProPresenter order` : 'No Planning Center plan today' };
     }
     return this.detail(best);
+  }
+  // Never hold up the screen for Planning Center: return the last answer right away and refresh in the background.
+  pickNow(pp) {
+    if (!this.enabled) return null;
+    const pl = pp?.active_playlist?.presentation?.playlist?.name || '', items = (pp?.playlist?.items || []).map(i => i.id?.name).join('|');
+    const key = pl + '#' + items;
+    if (!this.busy && (key !== this.lastKey || Date.now() - (this.lastAt || 0) > 5000)) {
+      this.busy = true;
+      this.pick(pp).then(r => { this.last = r; this.lastKey = key; this.lastAt = Date.now(); })
+        .catch(e => { this.last = { error: 'Planning Center: ' + e.message }; this.lastAt = Date.now(); })
+        .finally(() => { this.busy = false; });
+    }
+    return this.last || { error: null, unmatched: true, note: 'Loading Planning Center…' };
   }
   async detail(c) {
     if (this.cache && this.cache.id === c.id && Date.now() - this.at < 120000) return this.cache;
@@ -566,7 +586,7 @@ class StatusService {
     try {
       let ppSnap, pcoPlan;
       if (this.cfg.demo) { ppSnap = demoPP(); pcoPlan = demoPCO(); }
-      else { ppSnap = await this.pp.snapshot(); pcoPlan = await this.pco.pick(ppSnap); }
+      else { ppSnap = await this.pp.snapshot(); pcoPlan = this.pco.pickNow(ppSnap); }
       this.state = buildState(this.cfg, ppSnap, pcoPlan, this.runsFor());
       this.runsFor().save();
     } catch (e) { this.state = { fatal: String(e), now: clockSec(new Date()) }; }

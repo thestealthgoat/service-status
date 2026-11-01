@@ -1,14 +1,14 @@
 {
-  "version": "2.0.0",
+  "version": "2.0.1",
   "min_shell": "2.0.0",
-  "notes": "First release",
+  "notes": "Faster startup: shows ProPresenter right away and loads Planning Center in the background (was ~30 s).",
   "files": {
     "server.js": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.0/server.js",
-      "sha256": "e2c448a25fee58e3a96f98ca971e1dc3115b20a4919f690d3425d5b84d800531"
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.1/server.js",
+      "sha256": "df876e53b00ceaa5fb60d1ceadfd3f07cf577e7305e48a51e6c9aba633f7eea7"
     },
     "index.html": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.0/index.html",
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.1/index.html",
       "sha256": "bab845e92e75c64285c7635804b8cffab1445110670d6e1a90f2b2718fe90591"
     }
   }
