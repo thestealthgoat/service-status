@@ -125,6 +125,26 @@
   body.m .foot { padding: 0 16px 10px; flex-wrap: wrap; }
   
 
+  /* display settings */
+  li.hdr { color: var(--acc); font-size: 13px; font-weight: 650; padding: 16px 0 4px; border: 0; letter-spacing: .02em; }
+  body.m li.hdr { padding: 12px 4px 2px; font-size: 12px; }
+  body.no-people .who { display: none; }
+  body.no-lengths li .l { visibility: hidden; }
+  body.no-seconds .clock .sec { display: none; }
+  body.size-l .order, body.size-l #list2 { zoom: 1.15; } body.size-xl .order, body.size-xl #list2 { zoom: 1.32; }
+  body.size-l aside { zoom: 1.08; } body.size-xl aside { zoom: 1.15; }
+  body.m.size-l aside, body.m.size-xl aside { zoom: 1; }
+  body.tv.size-l #tv { zoom: 1.08; } body.tv.size-xl #tv { zoom: 1.15; }
+  .tvnow .sec, .tvnext .sec { color: var(--acc); font-size: 1.4vw; font-weight: 600; }
+  .dbtn { background: none; border: 1px solid var(--line); color: var(--mute); border-radius: 99px; padding: 4px 12px; font-size: 13px; cursor: pointer; }
+  .dbtn:hover, .dbtn:focus-visible { color: var(--text); border-color: var(--mute); }
+  .sheet .tog { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+  .sheet .tog input[type=checkbox] { appearance: none; width: 44px; height: 26px; border-radius: 13px; background: #2b3441; position: relative; cursor: pointer; transition: background .15s; flex: none; }
+  .sheet .tog input[type=checkbox]::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left .15s; }
+  .sheet .tog input[type=checkbox]:checked { background: #2fb36b; } .sheet .tog input[type=checkbox]:checked::after { left: 21px; }
+  .sheet .tog small { display: block; color: var(--mute); font-size: 12px; }
+  body.m .dbtn { padding: 4px 10px; }
+
   /* iPad on /mobile: what's on now on the left, the whole order on the right */
   #list2 { display: none; }
   body.m.ipad .layout { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); padding: 6px 24px 20px; gap: 18px 28px; }
@@ -134,6 +154,22 @@
   body.m.ipad .clock { font-size: 40px; } body.m.ipad .v { font-size: 36px; } body.m.ipad .mpct { font-size: 40px; } body.m.ipad .k { font-size: 14px; }
   body.m.ipad .now h2 { font-size: 24px; } body.m.ipad .now .big { font-size: 54px; }
   body.m.ipad li.mini { font-size: 16px; padding: 7px 4px; grid-template-columns: 52px 1fr 46px; } body.m.ipad li.mini .t, body.m.ipad li.mini .l { font-size: 14px; }
+
+  /* phone turned sideways: the iPad layout, compact enough to fit the short screen */
+  body.m.ipad.short .top { padding: 6px 16px; } body.m.ipad.short .top img { width: 20px; height: 20px; } body.m.ipad.short .top .svc { font-size: 15px; }
+  body.m.ipad.short .layout { padding: 2px 16px 8px; gap: 8px 18px; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+  body.m.ipad.short .clock, body.m.ipad.short .v, body.m.ipad.short .mpct { font-size: 24px; } body.m.ipad.short .k { font-size: 11px; }
+  body.m.ipad.short li.now { padding: 10px 14px 12px; margin: 2px 0 0; }
+  body.m.ipad.short .now h2 { font-size: 16px; } body.m.ipad.short .now .started { font-size: 12px; }
+  body.m.ipad.short .now .big { font-size: 34px; margin-top: 4px; } body.m.ipad.short .now .big small { font-size: 16px; }
+  body.m.ipad.short .now .line { font-size: 14px; }
+  body.m.ipad.short .tl { margin: 14px 0 24px; height: 8px; } body.m.ipad.short .tl .mk { height: 20px; top: -6px; } body.m.ipad.short .tl .ml { top: 16px; font-size: 12px; }
+  body.m.ipad.short .now .r2 { font-size: 13px; gap: 4px 16px; }
+  body.m.ipad.short li.next { padding: 8px 4px 2px; } body.m.ipad.short li.next .nt { font-size: 17px; } body.m.ipad.short li.next .nm, body.m.ipad.short li.next .k2 { font-size: 12px; }
+  body.m.ipad.short li.then { display: none; }
+  body.m.ipad.short li.mini { font-size: 13px; padding: 4px; grid-template-columns: 42px 1fr 38px; } body.m.ipad.short li.mini .t, body.m.ipad.short li.mini .l { font-size: 12px; }
+  body.m.ipad.short li.hdr { padding: 8px 4px 0; font-size: 11px; }
+  body.m.ipad.short .foot { display: none; }
 
   /* TV (/tv): one 16:9 screen read from across the room, sized in vw so it fits any TV */
   #tv { display: none; }
@@ -200,6 +236,7 @@
   <span class="sp"></span>
   <span class="st" id="pp">ProPresenter</span>
   <span class="st" id="pco">Planning Center</span>
+  <button class="dbtn" id="dbtn" onclick="openDisplay()" title="What this screen shows">Display</button>
   <button class="gear hidden" id="gear" onclick="openSettings()">Settings</button>
 </header>
 
@@ -228,6 +265,20 @@
     </div>
   </div>
   <div><div class="tvstrip" id="tvstrip"></div><div class="tvfoot"><span id="tvdone"></span><span id="tvmpct"></span></div></div>
+</div>
+
+<div class="modal hidden" id="dmodal" onclick="if (event.target === this) this.classList.add('hidden')">
+  <div class="sheet">
+    <h2>Display</h2>
+    <p>Just for this screen — each phone, iPad and computer keeps its own.</p>
+    <label class="tog"><span>Section headers<small>Worship, Message, Closing… from Planning Center</small></span><input type="checkbox" id="p_headers" onchange="setPref('headers', this.checked)"></label>
+    <label class="tog"><span>Singers and notes<small>Item descriptions, like the lead singer</small></span><input type="checkbox" id="p_people" onchange="setPref('people', this.checked)"></label>
+    <label class="tog"><span>Item lengths</span><input type="checkbox" id="p_lengths" onchange="setPref('lengths', this.checked)"></label>
+    <label class="tog"><span>Seconds on the clock</span><input type="checkbox" id="p_seconds" onchange="setPref('seconds', this.checked)"></label>
+    <label for="p_size">Text size</label>
+    <select id="p_size" onchange="setPref('size', this.value)"><option value="m">Normal</option><option value="l">Large</option><option value="xl">Extra large</option></select>
+    <div class="btns"><button type="button" class="btn primary" onclick="$('dmodal').classList.add('hidden')">Done</button></div>
+  </div>
 </div>
 
 <div class="modal hidden" id="modal">
@@ -266,6 +317,31 @@ const mmss = s => { if (s == null) return ''; const neg = s < 0; s = Math.abs(Ma
 const shortTimer = t => (t || '').replace(/^(-?)00:/, '$1').replace(/^(-?)0(\d:)/, '$1$2');
 const pretty = t => (t || '').replace(/\s*:\s*/, ' · ');       // "Message: P. Jay Miller" -> "Message · P. Jay Miller"
 let lastCur = null, lastState = null, setupShown = false, lastUpdate = null;
+// ---- display settings: per device (saved in this browser), so each phone, iPad and TV can differ.
+// The TV has no buttons, so it also reads them from its address: /tv?headers=1&size=l&people=0
+const PREF_DEFAULTS = { headers: false, people: true, lengths: true, seconds: true, size: 'm' };
+let prefs = { ...PREF_DEFAULTS };
+try { prefs = { ...prefs, ...JSON.parse(localStorage.getItem('ss_prefs') || '{}') }; } catch (e) {}
+{ const q = new URLSearchParams(location.search);
+  for (const k of ['headers', 'people', 'lengths', 'seconds']) if (q.has(k)) prefs[k] = q.get(k) !== '0';
+  if (q.has('size')) prefs.size = q.get('size'); }
+function applyPrefs() {
+  const b = document.body.classList;
+  b.toggle('no-people', !prefs.people); b.toggle('no-lengths', !prefs.lengths); b.toggle('no-seconds', !prefs.seconds);
+  b.toggle('size-l', prefs.size === 'l'); b.toggle('size-xl', prefs.size === 'xl');
+}
+function savePrefs() { try { localStorage.setItem('ss_prefs', JSON.stringify(prefs)); } catch (e) {} applyPrefs(); if (lastState) render(lastState); }
+function openDisplay() {
+  for (const k of ['headers', 'people', 'lengths', 'seconds']) $('p_' + k).checked = !!prefs[k];
+  $('p_size').value = prefs.size; $('dmodal').classList.remove('hidden');
+}
+function setPref(k, v) { prefs[k] = v; savePrefs(); }
+// mark each item with the section header above it in Planning Center
+function withSections(s) {
+  let sec = '';
+  for (const r of s.rundown || []) { if (r.type === 'header') sec = (r.title || '').trim(); else r._sec = sec; }
+}
+const hdr = (r, prev) => prefs.headers && r._sec && (!prev || prev._sec !== r._sec) ? '<li class="hdr">' + esc(r._sec) + '</li>' : '';
 function updAction(a) { fetch('/api/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: a }) }); }
 function showVersion() {
   const u = lastUpdate; if (!u) { $('s_ver').textContent = ''; return; }
@@ -277,15 +353,18 @@ function showVersion() {
                           : '<button type="button" class="linkbtn" onclick="updAction(\'check\')">Check now</button>');
   if ($('s_ver').innerHTML !== html) $('s_ver').innerHTML = html;
 }
-const MODE = /^\/tv/.test(location.pathname) ? 'tv' : /^\/(mobile|m)\b/.test(location.pathname) ? 'mobile' : 'desk';
+// /tv = TV, /mobile = phone/iPad; the plain address also switches to the phone/iPad layout on touch screens
+const MODE = /^\/tv/.test(location.pathname) ? 'tv'
+  : (/^\/(mobile|m)\b/.test(location.pathname) || window.matchMedia('(pointer: coarse)').matches) ? 'mobile' : 'desk';
 const narrow = window.matchMedia('(max-width: 820px)');
 const phone = { get matches() { return MODE === 'mobile' || narrow.matches; } };
 function setMode() {
   document.body.classList.toggle('tv', MODE === 'tv');
   document.body.classList.toggle('m', MODE === 'mobile' || narrow.matches);
   document.body.classList.toggle('ipad', MODE === 'mobile' && window.innerWidth >= 700);
+  document.body.classList.toggle('short', MODE === 'mobile' && window.innerWidth >= 700 && window.innerHeight < 560);   // phone turned sideways
 }
-setMode(); window.addEventListener('resize', () => { setMode(); if (lastState) render(lastState); });
+applyPrefs(); setMode(); window.addEventListener('resize', () => { setMode(); if (lastState) render(lastState); });
 if (MODE === 'tv' && navigator.wakeLock) {           // keep the TV's browser from sleeping
   const lock = () => navigator.wakeLock.request('screen').catch(() => {});
   lock(); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') lock(); });
@@ -298,7 +377,7 @@ function nowNext(s, rows, cur) {
   let h = cur >= 0 ? '<li class="now" id="nowli">' + nowPanel(s, rows[cur]) + '</li>' : ((s.message || s.deck) ? '<li class="now">' + nowPanel(s, null) + '</li>' : '<li class="wait">Nothing up yet</li>');
   const up = rows.slice(cur + 1).filter(r => r.planned || r.proj);
   const n = up[0];
-  if (n) h += '<li class="next"><div class="k2">Next' + (n.proj || n.planned ? ' at <span class="' + tcls(n) + '">' + esc(n.proj || n.planned) + '</span>' : '') + '</div>' +
+  if (n) h += '<li class="next"><div class="k2">Next' + (prefs.headers && n._sec && n._sec !== (rows[cur] && rows[cur]._sec) ? ' · <span style="color:var(--acc)">' + esc(n._sec) + '</span>' : '') + (n.proj || n.planned ? ' at <span class="' + tcls(n) + '">' + esc(n.proj || n.planned) + '</span>' : '') + '</div>' +
               '<div class="nt">' + esc(n.title.replace(/:.*$/, '')) + (n.desc || /:/.test(n.title) ? '<span class="who">' + esc(n.desc || n.title.replace(/^[^:]*:\s*/, '')) + '</span>' : '') + '</div>' +
               (n.length ? '<div class="nm">' + mmss(n.length) + ' planned</div>' : '') + '</li>';
   up.slice(1, 3).forEach(r => { h += '<li class="then"><span class="t ' + tcls(r) + '">' + esc(r.proj || r.planned || '') + '</span><span>' + esc(r.title.replace(/:.*$/, '')) +
@@ -307,7 +386,7 @@ function nowNext(s, rows, cur) {
 }
 // phone: the whole order on one screen, one line each
 function miniOrder(rows, cur) {
-  return rows.map((r, i) => '<li class="mini' + (i === cur ? ' cur' : (cur >= 0 && i < cur ? ' done' : '')) + '"><span class="t ' + tcls(r) + '">' +
+  return rows.map((r, i) => hdr(r, rows[i - 1]) + '<li class="mini' + (i === cur ? ' cur' : (cur >= 0 && i < cur ? ' done' : '')) + '"><span class="t ' + tcls(r) + '">' +
     esc(r.actual || r.proj || r.planned || '') + '</span><span>' + esc(r.title.replace(/:.*$/, '')) + (r.desc ? '<span class="who">' + esc(r.desc) + '</span>' : '') +
     '</span><span class="l">' + (r.length ? mmss(r.length) : '') + '</span></li>').join('');
 }
@@ -392,10 +471,12 @@ function render(s) {
   $('mpct').className = 'mpct' + (s.message_pct == null ? ' none' : '');
 
   // running order
+  withSections(s);
   const rows = (s.rundown || []).filter(r => r.type !== 'header');
   let html = '', curIdx = -1;
   rows.forEach((r, i) => { if (r.current) curIdx = i; });
   rows.forEach((r, i) => {
+    html += hdr(r, rows[i - 1]);
     if (i === curIdx) { html += '<li class="now" id="nowli">' + nowPanel(s, r) + '</li>'; return; }
     const done = curIdx >= 0 && i < curIdx;
     const tm = r.actual || r.proj || r.planned || '';
@@ -433,6 +514,7 @@ function renderTV(s) {
   $('tvtarget').textContent = s.timer_target ? 'Runs out ' + s.timer_target : '';
   $('tvmpct').textContent = s.message_pct == null ? '' : 'Message ' + Math.round(s.message_pct) + '%';
 
+  withSections(s);
   const rows = (s.rundown || []).filter(r => r.type !== 'header');
   let cur = rows.findIndex(r => r.current);
   const r = cur >= 0 ? rows[cur] : null, m = s.message, dk = s.deck;
@@ -441,7 +523,7 @@ function renderTV(s) {
   if (!r && !m && !dk) h = '<div class="tvwait">' + (s.pp?.ok ? 'Nothing up yet' : 'Waiting for ProPresenter…') + '</div>';
   else {
     const title = r ? r.title : (m ? m.name : (s.current_item || ''));
-    h += '<div class="lbl">Now' + (s.current_item_started ? ' · started ' + esc(s.current_item_started) : '') + '</div>';
+    h += '<div class="lbl">Now' + (prefs.headers && r && r._sec ? ' · <span class="sec">' + esc(r._sec) + '</span>' : '') + (s.current_item_started ? ' · started ' + esc(s.current_item_started) : '') + '</div>';
     h += '<h1>' + esc(pretty(title)) + (r && r.desc ? '<span class="who">' + esc(r.desc) + '</span>' : '') + '</h1>';
     if (m) {
       const marks = m.points.map(p => ({ at: p.at, label: p.label.replace(/^Point\s*/i, '') }));
@@ -470,7 +552,7 @@ function renderTV(s) {
   let n = '';
   if (up[0]) {
     const x = up[0], who = x.desc || (/:/.test(x.title) ? x.title.replace(/^[^:]*:\s*/, '') : '');
-    n += '<div class="k">Next' + (x.proj || x.planned ? ' at <span class="' + tcls(x) + '">' + esc(x.proj || x.planned) + '</span>' : '') + '</div>' +
+    n += '<div class="k">Next' + (prefs.headers && x._sec && x._sec !== (r && r._sec) ? ' · <span class="sec">' + esc(x._sec) + '</span>' : '') + (x.proj || x.planned ? ' at <span class="' + tcls(x) + '">' + esc(x.proj || x.planned) + '</span>' : '') + '</div>' +
          '<div class="nt">' + esc(x.title.replace(/:.*$/, '')) + (who ? '<span class="who">' + esc(who) + '</span>' : '') + '</div>' +
          (x.length ? '<div class="nm">' + mmss(x.length) + ' planned</div>' : '');
     up.slice(1, 3).forEach(y => { n += '<div class="then"><span class="' + tcls(y) + '">' + esc(y.proj || y.planned || '') + '</span><span>' + esc(y.title.replace(/:.*$/, '')) + '</span></div>'; });
