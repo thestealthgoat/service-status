@@ -9,7 +9,7 @@ A live **“where are we in the service?”** screen for the production booth, i
 - **Read-only:** it never changes anything in ProPresenter or Planning Center.
 
 ## Install (Mac)
-1. Download **Service-Status-Installer.zip** from [Releases](https://github.com/thestealthgoat/service-status/releases), open it, and double-click **Service Status Installer.pkg** — one installer for Intel and Apple Silicon.
+1. Download **Service Status Installer.pkg** from [Releases](https://github.com/thestealthgoat/service-status/releases) — one installer for Intel and Apple Silicon.
 2. Open it. The first time, macOS may say it can’t check it: System Settings → Privacy & Security → **Open Anyway**.
 3. The app opens when it’s done. Its welcome screen asks for ProPresenter’s network port and (optionally) a Planning Center Personal Access Token.
 
