@@ -1,15 +1,15 @@
 {
-  "version": "2.0.3",
+  "version": "2.0.4",
   "min_shell": "2.0.0",
-  "notes": "New screens: /tv (1920x1080 full-screen backstage display) and /mobile (iPhone: Now / Full order; iPad: now + whole order side by side).",
+  "notes": "Home-screen icon for iPhone/iPad: the Service Status icon, full size (no black border).",
   "files": {
     "server.js": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.3/server.js",
-      "sha256": "a1154c39729e256fde04f2b8d091ba542655abdd33012845414e9c0555ec6da4"
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.4/server.js",
+      "sha256": "9f3fe4cc315b280dd4c904b5221c4882fd053b0383c21e3dd4921074364dae92"
     },
     "index.html": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.3/index.html",
-      "sha256": "77ed3d303f56bd0f2d7abab0e610c9966c793b0fa03c91e0b890bea7fcfb74c2"
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.4/index.html",
+      "sha256": "ad22227fee62ecb155724b3c7cf46e3c807210cc67d849287496257f3a141326"
     }
   }
 }
