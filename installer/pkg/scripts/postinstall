@@ -1,0 +1,9 @@
+#!/bin/bash
+# Open the app for whoever is logged in, once the install is done.
+APP="/Applications/Service Status.app"
+U=$(stat -f%Su /dev/console)
+if [ -n "$U" ] && [ "$U" != "root" ] && [ -d "$APP" ]; then
+  UID_=$(id -u "$U")
+  ( sleep 2; launchctl asuser "$UID_" sudo -u "$U" /usr/bin/open "$APP" ) >/dev/null 2>&1 &
+fi
+exit 0

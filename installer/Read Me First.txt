@@ -1,0 +1,23 @@
+SERVICE STATUS
+Where are we in the service? Shows where the pastor is in the message (point, % through, projected finish), where the band is in each song, and your whole order of service with live ahead/behind times. Read-only: it never changes anything in ProPresenter or Planning Center.
+
+INSTALL
+1. Drag "Service Status" onto the Applications folder in this window.
+2. Open it from Applications. The first time, macOS says it can't check the app for malicious software (it isn't from the App Store). Click Done, then open System Settings > Privacy & Security, scroll down, and click "Open Anyway" next to Service Status. You only do this once.
+   If macOS instead says the app "is damaged", open Terminal and run:
+       xattr -cr "/Applications/Service Status.app"
+   then open it again.
+
+SET UP (the welcome screen walks you through it)
+- ProPresenter: in ProPresenter go to Settings > Network, turn on Enable Network, and type that port into Service Status. If ProPresenter runs on a different computer, type its IP address too.
+- Planning Center (optional, adds your order of service and planned times): sign in at api.planningcenteronline.com/oauth/applications, create a Personal Access Token, and paste its Application ID and Secret. They stay on this computer and are only used to read your plans.
+- Service type: leave on Automatic (uses whichever service type has a plan today) or pick one.
+- Message timer: leave on Automatic (a ProPresenter timer named Message or Sermon) or pick yours.
+
+TIPS
+- Message points: label slides "Point 1", "Point 2"... (or start the point text with "1.", "2.") and they show as marks on the message timeline.
+- Songs: the timeline marks come from your ProPresenter sections (Verse 1, Chorus, Bridge...).
+- Planning Center item descriptions show next to each item (handy for the lead singer on songs).
+- Phones and iPads on the same network can open the address shown at the bottom of the app. Add it to the home screen for an app-like icon.
+- Closing the window keeps it running for phones. Cmd+Q quits.
+- It learns how long your items really take each week, so time estimates get better every Sunday.

@@ -1,0 +1,9 @@
+{
+  "name": "service-status",
+  "productName": "Service Status",
+  "version": "2.0.0",
+  "description": "Where are we in the service: ProPresenter message and song progress plus your Planning Center order of service. Read-only.",
+  "main": "main.js",
+  "license": "UNLICENSED",
+  "private": true
+}

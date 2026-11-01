@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+  <title>Service Status</title>
+  <background file="background.png" alignment="bottomleft" scaling="none"/>
+  <background-darkAqua file="background-dark.png" alignment="bottomleft" scaling="none"/>
+  <welcome file="welcome.html" mime-type="text/html"/>
+  <conclusion file="conclusion.html" mime-type="text/html"/>
+  <options customize="never" require-scripts="false" hostArchitectures="x86_64,arm64"/>
+  <domains enable_localSystem="true" enable_anywhere="false" enable_currentUserHome="false"/>
+  <script>
+    function isArm() { try { return system.sysctl('hw.optional.arm64') == 1; } catch (e) { return false; } }
+  </script>
+  <choices-outline>
+    <line choice="intel"/>
+    <line choice="arm"/>
+  </choices-outline>
+  <choice id="intel" title="Service Status (Intel)" visible="false" selected="!isArm()" enabled="!isArm()">
+    <pkg-ref id="app.servicestatus.x64"/>
+  </choice>
+  <choice id="arm" title="Service Status (Apple Silicon)" visible="false" selected="isArm()" enabled="isArm()">
+    <pkg-ref id="app.servicestatus.arm64"/>
+  </choice>
+  <pkg-ref id="app.servicestatus.x64" version="2.0.0" onConclusion="none">x64.pkg</pkg-ref>
+  <pkg-ref id="app.servicestatus.arm64" version="2.0.0" onConclusion="none">arm64.pkg</pkg-ref>
+</installer-gui-script>

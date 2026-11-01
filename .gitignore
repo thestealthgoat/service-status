@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.zip
+*.part_*
+*.pkg
+*.dmg
+.DS_Store
+runs.json
+dev-config.json
+config.json
