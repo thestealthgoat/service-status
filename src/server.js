@@ -127,7 +127,11 @@ class PCO {
       while (jobs.length) {
         const [t] = jobs.shift();
         let d;
-        try { d = await this.get(`/service_types/${t.id}/plans?filter=after&after=${since}&order=sort_date&per_page=4`); }
+        try {
+          d = await this.get(`/service_types/${t.id}/plans?filter=after&after=${since}&order=sort_date&per_page=4`);
+          // if the date filter was ignored (old plans came back), ask the long way
+          if ((d.data || []).some(p => (p.attributes.sort_date || '').slice(0, 10) < since)) { const e = new Error('filter ignored'); e.status = 400; throw e; }
+        }
         catch (e) {
           if (/401|403/.test(e.message)) { authErr = e; continue; }
           if (e.status !== 400) continue;

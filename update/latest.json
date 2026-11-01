@@ -5,7 +5,7 @@
   "files": {
     "server.js": {
       "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.2/server.js",
-      "sha256": "4cba9233aee9aa6687607a0fbb9c3172a62f21af0fa50c11caf1fc6b873291b1"
+      "sha256": "b916f82fe393e13317688edddec4a011ab1bccb80ba164cdd13146a991de9c1d"
     },
     "index.html": {
       "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.2/index.html",
