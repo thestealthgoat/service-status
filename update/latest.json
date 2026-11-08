@@ -1,15 +1,15 @@
 {
-  "version": "2.0.8",
+  "version": "2.0.9",
   "min_shell": "2.0.0",
-  "notes": "Timer spot choice in Display: your timer (and videos), countdown to the next item, only videos, the clock, or nothing.",
+  "notes": "iPad: the order column sizes its text to fill the column (no scrolling); same for the phone Full order tab. Rehearsal run-throughs (20+ min before service) no longer show as the service's start times or teach the averages.",
   "files": {
     "server.js": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.8/server.js",
-      "sha256": "cf048a70631b704b53db88bcd2e1b79e9f838f17d19278d53ab34255a21dfd12"
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.9/server.js",
+      "sha256": "89a72cb505d4ff481f6669fb43cc6b7d783a3832c9767f49ff4f2f22b0f97019"
     },
     "index.html": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.8/index.html",
-      "sha256": "1e558d2785909172567a90f176187371cafdadb1d52ace3329432594c7488c73"
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.9/index.html",
+      "sha256": "dd3a6dc0232956c44239ca36213f9cf67f86766e80c8343ed5d924fb31fe55e9"
     }
   }
 }

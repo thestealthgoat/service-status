@@ -255,12 +255,16 @@ class RunStore {
   }
   day(d) { return (this.data.days[d] ||= {}); }
   svc(d, s) { const x = this.day(d); return (x[s] ||= { rows: {} }); }
-  begin(runs, key, ts) { const r = (runs.rows[key] ||= {}); if (!r.start || r.end) { if (!r.start) r.start = ts; delete r.end; } this.dirty = true; }
+  begin(runs, key, ts) {        // back on an item within 10 min = same run; later than that = it's being run again
+    const r = (runs.rows[key] ||= {});
+    if (!r.start || (r.end && ts - r.end > 600000)) { r.start = ts; delete r.learned; }
+    delete r.end; this.dirty = true;
+  }
   finish(runs, key, ts, row, demo) {
     const r = runs.rows[key]; if (!r || !r.start) return;
     r.end = ts; this.dirty = true;
     const secs = (r.end - r.start) / 1000, k = avgKeyOf(row);
-    if (!demo && k && !r.learned && secs >= 5 && secs <= 3 * (row.length || 600) + 600) { r.learned = 1; this.addAvg(k, secs); }
+    if (!demo && !runs.rehearsal && k && !r.learned && secs >= 5 && secs <= 3 * (row.length || 600) + 600) { r.learned = 1; this.addAvg(k, secs); }
   }
   addAvg(k, secs) { const a = (this.data.avg[k] ||= []); a.push(Math.round(secs)); while (a.length > 8) a.shift(); this.dirty = true; }
   median(k) { const a = (this.data.avg[k] || []).slice().sort((x, y) => x - y); if (a.length < 2) return null; const m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; }
@@ -476,10 +480,13 @@ function buildState(cfg, pp, pco, store) {
 
   // ---- which Planning Center item is on now (sticky, forward-biased, debounced)
   const dayKey = isoDay(new Date());
-  const svcName = svc || 'service';
+  // more than 20 min before the service starts = rehearsal: tracked separately, never counted as the service
+  const rehearsal = !!(start && now < start.getTime() - 20 * 60000);
+  const svcName = (svc || 'service') + (rehearsal ? ' rehearsal' : '');
   if (TRACK.svcKey !== dayKey + ' ' + svcName)
     Object.assign(TRACK, { svcKey: dayKey + ' ' + svcName, cur: null, curStart: null, pend: null, pendSince: null, lastSeen: null, done: false });
   const runs = store.svc(dayKey, svcName);
+  runs.rehearsal = rehearsal;
   const keys = rows.map((r, i) => rowKeyOf(rows, i));
   const isMsgRow = i => i !== null && i >= 0 && rows[i] && MSG_WORDS.test(rows[i].title) && rows[i].type !== 'header';
 
@@ -531,7 +538,7 @@ function buildState(cfg, pp, pco, store) {
   if (curRow !== null && rows[curRow]) { if (TRACK.curTitle !== rows[curRow].title) TRACK.curDeck = pid.uuid; TRACK.curTitle = rows[curRow].title; }
 
   // ---- expected length of each item: the earlier service today, else the median of past Sundays, else PCO
-  const otherSvcs = Object.entries(store.day(dayKey)).filter(([n]) => n !== svcName).map(([, v]) => v.rows || {});
+  const otherSvcs = Object.entries(store.day(dayKey)).filter(([n, v]) => n !== svcName && !v.rehearsal && !/rehearsal$/.test(n)).map(([, v]) => v.rows || {});
   const expected = i => {
     const r = rows[i]; if (r.type === 'header') return 0;
     for (const o of otherSvcs) { const x = o[keys[i]]; if (x && x.start && x.end) return (x.end - x.start) / 1000; }

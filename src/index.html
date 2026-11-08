@@ -154,6 +154,10 @@
   body.m.ipad aside { grid-column: 1 / -1; }
   body.m.ipad .seg { display: none; }
   body.m.ipad #list2 { display: block; overflow-y: auto; min-height: 0; }
+  /* sized by fitOrder(): --fs is the largest text that fits every row in the column */
+  body.m.ipad #list2 li.mini, body.m #order li.mini { font-size: var(--fs, 15px); padding: .32em 4px; grid-template-columns: 3.2em 1fr 3em; }
+  body.m.ipad #list2 li.mini .t, body.m.ipad #list2 li.mini .l, body.m #order li.mini .t, body.m #order li.mini .l { font-size: .86em; }
+  body.m.ipad #list2 li.hdr, body.m #order li.hdr { font-size: calc(var(--fs, 15px) * .78); padding: .7em 4px .1em; }
   body.m.ipad .clock { font-size: 40px; } body.m.ipad .v { font-size: 36px; } body.m.ipad .mpct { font-size: 40px; } body.m.ipad .k { font-size: 14px; }
   body.m.ipad .now h2 { font-size: 24px; } body.m.ipad .now .big { font-size: 54px; }
   body.m.ipad li.mini { font-size: 16px; padding: 7px 4px; grid-template-columns: 52px 1fr 46px; } body.m.ipad li.mini .t, body.m.ipad li.mini .l { font-size: 14px; }
@@ -375,6 +379,21 @@ function timerSlot(s, slot, label, val, sub) {
   } else show = false;                        // 'off', or 'video' with nothing playing
   $(slot).style.visibility = show ? '' : 'hidden';
 }
+// Size the whole-order list so every item fits its column with no scrolling, as large as the space allows.
+let fitKey = '';
+function fitOrder(box) {
+  for (const b of [$('list2'), $('order')]) if (b !== box) b.style.removeProperty('--fs');
+  if (!box) return;
+  const rows = box.querySelectorAll('li.mini, li.hdr').length, key = rows + 'x' + box.clientHeight + 'x' + box.clientWidth + prefs.size;
+  if (key === fitKey && box.style.getPropertyValue('--fs')) return;
+  fitKey = key;
+  let lo = 12, hi = 24;
+  for (let i = 0; i < 8; i++) {             // binary search on the font size
+    const mid = (lo + hi) / 2; box.style.setProperty('--fs', mid + 'px');
+    if (box.scrollHeight <= box.clientHeight + 1) lo = mid; else hi = mid;
+  }
+  box.style.setProperty('--fs', Math.floor(lo) + 'px');
+}
 function setPref(k, v) { prefs[k] = v; savePrefs(); }
 // mark each item with the section header above it in Planning Center
 function withSections(s) {
@@ -533,6 +552,7 @@ function render(s) {
   $('seg-now').className = view === 'now' ? 'on' : ''; $('seg-all').className = view === 'all' ? 'on' : '';
   if (!html) html = '<li class="wait">Waiting for ProPresenter' + (s.pco?.enabled ? '' : ' (add Planning Center in Settings to see the order of service)') + '</li>';
   $('list').innerHTML = html;
+  fitOrder(document.body.classList.contains('ipad') ? $('list2') : (phone.matches && view === 'all' ? $('order') : null));
   if (curIdx !== lastCur) {
     lastCur = curIdx;
     const li = $('nowli'), box = $('order');
