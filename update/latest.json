@@ -1,6 +1,6 @@
 {
-  "version": "2.0.11",
+  "version": "2.0.12",
   "min_shell": "2.0.0",
-  "notes": "Cards is now the default look (any device that picked a look keeps it).",
+  "notes": "People on every item: 'Close Worship: Tandi' shows Tandi as a tag, like the singers.",
   "files": {}
 }

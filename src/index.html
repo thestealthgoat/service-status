@@ -50,6 +50,7 @@
   li.row .l { color: var(--mute); text-align: right; font-size: 15px; }
   li.row.done, li.row.done .t, li.row.done .l { color: var(--dim); }
   .who { color: var(--acc); font-size: .85em; margin-left: 8px; white-space: nowrap; }
+  .who.note { opacity: .7; }
   li.row.done .who { opacity: .55; }
 
   /* the item that's on now */
@@ -368,7 +369,18 @@ const $ = id => document.getElementById(id);
 const esc = s => (s ?? '').toString().replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const mmss = s => { if (s == null) return ''; const neg = s < 0; s = Math.abs(Math.round(s)); return (neg ? '-' : '') + Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); };
 const shortTimer = t => (t || '').replace(/^(-?)00:/, '$1').replace(/^(-?)0(\d:)/, '$1$2');
-const pretty = t => (t || '').replace(/\s*:\s*/, ' · ');       // "Message: P. Jay Miller" -> "Message · P. Jay Miller"
+const pretty = t => (t || '').replace(/\s*:\s*/, ' · ');
+// "Close Worship: Tandi Begnaud" -> name "Close Worship", who "Tandi Begnaud" (only when the part after the colon looks like a name)
+function splitTitle(t) {
+  t = (t || '').trim(); const m = t.match(/^([^:]+):\s*(.+)$/);
+  return m && !/\d/.test(m[2]) && m[2].split(/\s+/).length <= 5 ? { name: m[1].trim(), who: m[2].trim() } : { name: t, who: '' };
+}
+// the people/notes tags after an item name: the person from the title, then the PCO description (lead singer, series...)
+function whoTags(r) {
+  const w = splitTitle(r && r.title).who, d = ((r && r.desc) || '').replace(/\s+/g, ' ').trim();
+  return (w ? '<span class="who">' + esc(w) + '</span>' : '') + (d && d !== w ? '<span class="who' + (w ? ' note' : '') + '">' + esc(d) + '</span>' : '');
+}
+const itemLabel = r => esc(splitTitle(r && r.title).name) + whoTags(r);       // "Message: P. Jay Miller" -> "Message · P. Jay Miller"
 let lastCur = null, lastState = null, setupShown = false, lastUpdate = null;
 // ---- display settings: per device (saved in this browser), so each phone, iPad and TV can differ.
 // The TV has no buttons, so it also reads them from its address: /tv?headers=1&size=l&people=0
@@ -478,16 +490,15 @@ function nowNext(s, rows, cur) {
   const up = rows.slice(cur + 1).filter(r => r.planned || r.proj);
   const n = up[0];
   if (n) h += '<li class="next"><div class="k2">Next' + (prefs.headers && n._sec && n._sec !== (rows[cur] && rows[cur]._sec) ? ' · <span style="color:var(--acc)">' + esc(n._sec) + '</span>' : '') + (n.proj || n.planned ? ' at <span class="' + tcls(n) + '">' + esc(n.proj || n.planned) + '</span>' : '') + '</div>' +
-              '<div class="nt">' + esc(n.title.replace(/:.*$/, '')) + (n.desc || /:/.test(n.title) ? '<span class="who">' + esc(n.desc || n.title.replace(/^[^:]*:\s*/, '')) + '</span>' : '') + '</div>' +
+              '<div class="nt">' + itemLabel(n) + '</div>' +
               (n.length ? '<div class="nm">' + mmss(n.length) + ' planned</div>' : '') + '</li>';
-  up.slice(1, 3).forEach(r => { h += '<li class="then"><span class="t ' + tcls(r) + '">' + esc(r.proj || r.planned || '') + '</span><span>' + esc(r.title.replace(/:.*$/, '')) +
-      (r.desc || /:/.test(r.title) ? '<span class="who">' + esc(r.desc || r.title.replace(/^[^:]*:\s*/, '')) + '</span>' : '') + '</span><span class="l">' + (r.length ? mmss(r.length) : '') + '</span></li>'; });
+  up.slice(1, 3).forEach(r => { h += '<li class="then"><span class="t ' + tcls(r) + '">' + esc(r.proj || r.planned || '') + '</span><span>' + itemLabel(r) + '</span><span class="l">' + (r.length ? mmss(r.length) : '') + '</span></li>'; });
   return h;
 }
 // phone: the whole order on one screen, one line each
 function miniOrder(rows, cur) {
   return rows.map((r, i) => hdr(r, rows[i - 1]) + '<li class="mini' + (i === cur ? ' cur' : (cur >= 0 && i < cur ? ' done' : '')) + '"><span class="t ' + tcls(r) + '">' +
-    esc(r.actual || r.proj || r.planned || '') + '</span><span>' + esc(r.title.replace(/:.*$/, '')) + (r.desc ? '<span class="who">' + esc(r.desc) + '</span>' : '') +
+    esc(r.actual || r.proj || r.planned || '') + '</span><span>' + itemLabel(r) +
     '</span><span class="l">' + (r.length ? mmss(r.length) : '') + '</span></li>').join('');
 }
 
@@ -584,7 +595,7 @@ function render(s) {
     const tm = r.actual || r.proj || r.planned || '';
     const tc = r.actual ? '' : (r.proj_late == null ? '' : (r.proj_late >= 120 ? 'late' : (r.proj_late <= -120 ? 'early' : '')));
     html += '<li class="row' + (done ? ' done' : '') + '"><span class="t ' + tc + '"' + (r.planned ? ' title="Planned ' + esc(r.planned) + '"' : '') + '>' + esc(tm) +
-            '</span><span>' + esc(r.title) + (r.desc ? '<span class="who">' + esc(r.desc) + '</span>' : '') +
+            '</span><span>' + itemLabel(r) +
             '</span><span class="l">' + (r.length ? mmss(r.length) : '') + '</span></li>';
   });
   if (curIdx < 0 && (s.message || s.deck || s.video)) html = '<li class="now">' + nowPanel(s, null) + '</li>' + html;
@@ -658,9 +669,9 @@ function renderTV(s) {
   if (up[0]) {
     const x = up[0], who = x.desc || (/:/.test(x.title) ? x.title.replace(/^[^:]*:\s*/, '') : '');
     n += '<div class="k">Next' + (prefs.headers && x._sec && x._sec !== (r && r._sec) ? ' · <span class="sec">' + esc(x._sec) + '</span>' : '') + (x.proj || x.planned ? ' at <span class="' + tcls(x) + '">' + esc(x.proj || x.planned) + '</span>' : '') + '</div>' +
-         '<div class="nt">' + esc(x.title.replace(/:.*$/, '')) + (who ? '<span class="who">' + esc(who) + '</span>' : '') + '</div>' +
+         '<div class="nt">' + itemLabel(x) + '</div>' +
          (x.length ? '<div class="nm">' + mmss(x.length) + ' planned</div>' : '');
-    up.slice(1, 3).forEach(y => { n += '<div class="then"><span class="' + tcls(y) + '">' + esc(y.proj || y.planned || '') + '</span><span>' + esc(y.title.replace(/:.*$/, '')) + '</span></div>'; });
+    up.slice(1, 3).forEach(y => { n += '<div class="then"><span class="' + tcls(y) + '">' + esc(y.proj || y.planned || '') + '</span><span>' + itemLabel(y) + '</span></div>'; });
   }
   $('tvnext').innerHTML = n;
   // the whole service as a strip
