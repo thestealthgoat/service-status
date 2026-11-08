@@ -1,6 +1,6 @@
 {
-  "version": "2.0.10",
+  "version": "2.0.11",
   "min_shell": "2.0.0",
-  "notes": "Display \u2192 Look: Classic, Rail, Board or Cards. Works on older Android and iPhone browsers.",
+  "notes": "Cards is now the default look (any device that picked a look keeps it).",
   "files": {}
 }

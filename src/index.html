@@ -319,7 +319,7 @@
     <label class="tog"><span>Item lengths</span><input type="checkbox" id="p_lengths" onchange="setPref('lengths', this.checked)"></label>
     <label class="tog"><span>Seconds on the clock</span><input type="checkbox" id="p_seconds" onchange="setPref('seconds', this.checked)"></label>
     <label for="p_skin">Look</label>
-    <select id="p_skin" onchange="setPref('skin', this.value)"><option value="classic">Classic</option><option value="rail">Rail</option><option value="board">Board</option><option value="cards">Cards</option></select>
+    <select id="p_skin" onchange="prefs.skinSet = true; setPref('skin', this.value)"><option value="classic">Classic</option><option value="rail">Rail</option><option value="board">Board</option><option value="cards">Cards</option></select>
     <label for="p_timer">Timer spot</label>
     <select id="p_timer" onchange="setPref('timer', this.value)">
       <option value="auto">Timer, and videos while they play</option>
@@ -372,9 +372,10 @@ const pretty = t => (t || '').replace(/\s*:\s*/, ' · ');       // "Message: P. 
 let lastCur = null, lastState = null, setupShown = false, lastUpdate = null;
 // ---- display settings: per device (saved in this browser), so each phone, iPad and TV can differ.
 // The TV has no buttons, so it also reads them from its address: /tv?headers=1&size=l&people=0
-const PREF_DEFAULTS = { headers: false, people: true, lengths: true, seconds: true, size: 'm', timer: 'auto', skin: 'classic' };
+const PREF_DEFAULTS = { headers: false, people: true, lengths: true, seconds: true, size: 'm', timer: 'auto', skin: 'cards' };
 let prefs = { ...PREF_DEFAULTS };
 try { prefs = { ...prefs, ...JSON.parse(localStorage.getItem('ss_prefs') || '{}') }; } catch (e) {}
+if (!prefs.skinSet) prefs.skin = PREF_DEFAULTS.skin;   // Cards is the default unless a device picked a look itself
 { const q = new URLSearchParams(location.search);
   for (const k of ['headers', 'people', 'lengths', 'seconds']) if (q.has(k)) prefs[k] = q.get(k) !== '0';
   if (q.has('size')) prefs.size = q.get('size');
