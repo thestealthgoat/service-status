@@ -16,8 +16,14 @@ min_shell = sys.argv[3] if len(sys.argv) > 3 else '2.0.0'
 out = ROOT / 'update' / 'files' / ver
 out.mkdir(parents=True, exist_ok=True)
 files = {}
+import subprocess
 for f in ('server.js', 'index.html'):
     shutil.copyfile(ROOT / 'src' / f, out / f)
+# older Android/iPhone browsers don't understand ?. and ?? -- ship the page's script rewritten for them
+try:
+    subprocess.run(['node', str(ROOT / 'tools' / 'compat.js'), str(ROOT / 'src' / 'index.html'), str(out / 'index.html')], check=True)
+except Exception as e:
+    print('WARNING: compat step skipped (' + str(e) + ') -- shipping the page as written', file=sys.stderr)
     files[f] = {'url': RAW + f'update/files/{ver}/{f}', 'sha256': hashlib.sha256((out / f).read_bytes()).hexdigest()}
 latest = {'version': ver, 'min_shell': min_shell, 'notes': notes, 'files': files}
 (ROOT / 'update' / 'latest.json').write_text(json.dumps(latest, indent=2) + '\n')

@@ -178,6 +178,42 @@
   body.m.ipad.short li.hdr { padding: 8px 4px 0; font-size: 11px; }
   body.m.ipad.short .foot { display: none; }
 
+  /* ---- looks (Display → Look). Same colors and type; different structure. ---- */
+  /* Rail: the order as a timeline with a progress line; stats as soft tiles */
+  body.skin-rail aside > div { background: var(--panel); border-radius: 12px; padding: 10px 14px; }
+  body.skin-rail #list2 li.mini, body.skin-rail #order li.mini { position: relative; padding-left: 1.7em !important; border-bottom: 0; grid-template-columns: 3.2em 1fr 3em; }
+  body.skin-rail #list2 li.mini::before, body.skin-rail #order li.mini::before { content: ""; position: absolute; left: .55em; top: 0; bottom: 0; width: 2px; background: #2b3441; }
+  body.skin-rail #list2 li.mini::after, body.skin-rail #order li.mini::after { content: ""; position: absolute; left: .32em; top: 50%; width: .58em; height: .58em; margin-top: -.29em; border-radius: 50%; background: var(--bg); border: 2px solid #3a4553; }
+  body.skin-rail li.mini.done::before { background: var(--acc) !important; opacity: .55; }
+  body.skin-rail li.mini.done::after { background: #3a4553 !important; border-color: #3a4553 !important; }
+  body.skin-rail li.mini.cur { background: none; border-left: 0; }
+  body.skin-rail li.mini.cur::after { background: var(--acc) !important; border-color: var(--acc) !important; box-shadow: 0 0 0 .3em rgba(245,165,36,.22); }
+  body.skin-rail li.mini.cur span:nth-child(2) { color: var(--acc); }
+  body.skin-rail li.now { border-left: 0; border: 1px solid #2b3441; }
+
+  /* Board: a bold stat band across the top; order rows striped */
+  body.skin-board aside { gap: 10px !important; }
+  body.skin-board aside > div { background: linear-gradient(180deg, #1b222c, #151a22); border: 1px solid #252d38; border-radius: 14px; padding: 12px 16px; text-align: left; }
+  body.skin-board.m.ipad aside { grid-template-columns: repeat(4, 1fr); }
+  body.skin-board .clock, body.skin-board .v, body.skin-board .mpct { font-size: 44px !important; font-weight: 700; letter-spacing: -1px; }
+  body.skin-board .clock { font-weight: 300; }
+  body.skin-board .corner { text-align: left; margin: 0 !important; padding: 12px 16px !important; }
+  body.skin-board #list2 li.mini:nth-child(even), body.skin-board #order li.mini:nth-child(even) { background: rgba(255,255,255,.025); }
+  body.skin-board #list2 li.mini, body.skin-board #order li.mini { border-bottom: 0; border-radius: 6px; }
+  body.skin-board li.mini.cur { background: rgba(245,165,36,.14) !important; border-left: 0; box-shadow: inset 3px 0 0 var(--acc); }
+  body.skin-board .tl { height: 16px; border-radius: 8px; } body.skin-board .tl .fill { border-radius: 8px; }
+
+  /* Cards: everything on soft rounded panels, current item lit in orange */
+  body.skin-cards .layout { background: radial-gradient(1200px 600px at 0% 0%, #17202c 0%, var(--bg) 60%); }
+  body.skin-cards li.now { background: linear-gradient(160deg, #1d2633, #161c25); border-left: 0; border-radius: 18px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+  body.skin-cards li.next, body.skin-cards li.then { background: var(--panel); border-radius: 12px; margin-top: 8px; border-top: 0; padding-left: 14px; padding-right: 14px; }
+  body.skin-cards #list2 { background: var(--panel); border-radius: 18px; padding: 8px; }
+  body.skin-cards #list2 li.mini, body.skin-cards #order li.mini { border-bottom: 0; border-radius: 10px; margin: 1px 0; }
+  body.skin-cards li.mini.cur { background: linear-gradient(90deg, #f5a524, #e8892a) !important; border-left: 0; color: #141820; }
+  body.skin-cards li.mini.cur .t, body.skin-cards li.mini.cur .l, body.skin-cards li.mini.cur .who { color: #141820 !important; }
+  body.skin-cards li.mini.done { opacity: .55; }
+  body.skin-cards aside .v, body.skin-cards aside .clock, body.skin-cards aside .mpct { font-weight: 600; }
+
   /* TV (/tv): one 16:9 screen read from across the room, sized in vw so it fits any TV */
   #tv { display: none; }
   body.tv { overflow: hidden; cursor: none; }
@@ -282,6 +318,8 @@
     <label class="tog"><span>Singers and notes<small>Item descriptions, like the lead singer</small></span><input type="checkbox" id="p_people" onchange="setPref('people', this.checked)"></label>
     <label class="tog"><span>Item lengths</span><input type="checkbox" id="p_lengths" onchange="setPref('lengths', this.checked)"></label>
     <label class="tog"><span>Seconds on the clock</span><input type="checkbox" id="p_seconds" onchange="setPref('seconds', this.checked)"></label>
+    <label for="p_skin">Look</label>
+    <select id="p_skin" onchange="setPref('skin', this.value)"><option value="classic">Classic</option><option value="rail">Rail</option><option value="board">Board</option><option value="cards">Cards</option></select>
     <label for="p_timer">Timer spot</label>
     <select id="p_timer" onchange="setPref('timer', this.value)">
       <option value="auto">Timer, and videos while they play</option>
@@ -334,22 +372,24 @@ const pretty = t => (t || '').replace(/\s*:\s*/, ' · ');       // "Message: P. 
 let lastCur = null, lastState = null, setupShown = false, lastUpdate = null;
 // ---- display settings: per device (saved in this browser), so each phone, iPad and TV can differ.
 // The TV has no buttons, so it also reads them from its address: /tv?headers=1&size=l&people=0
-const PREF_DEFAULTS = { headers: false, people: true, lengths: true, seconds: true, size: 'm', timer: 'auto' };
+const PREF_DEFAULTS = { headers: false, people: true, lengths: true, seconds: true, size: 'm', timer: 'auto', skin: 'classic' };
 let prefs = { ...PREF_DEFAULTS };
 try { prefs = { ...prefs, ...JSON.parse(localStorage.getItem('ss_prefs') || '{}') }; } catch (e) {}
 { const q = new URLSearchParams(location.search);
   for (const k of ['headers', 'people', 'lengths', 'seconds']) if (q.has(k)) prefs[k] = q.get(k) !== '0';
   if (q.has('size')) prefs.size = q.get('size');
-  if (q.has('timer')) prefs.timer = q.get('timer'); }
+  if (q.has('timer')) prefs.timer = q.get('timer');
+  if (q.has('look')) prefs.skin = q.get('look'); }
 function applyPrefs() {
   const b = document.body.classList;
   b.toggle('no-people', !prefs.people); b.toggle('no-lengths', !prefs.lengths); b.toggle('no-seconds', !prefs.seconds);
+  for (const k of ['rail', 'board', 'cards']) b.toggle('skin-' + k, prefs.skin === k);
   b.toggle('size-l', prefs.size === 'l'); b.toggle('size-xl', prefs.size === 'xl');
 }
 function savePrefs() { try { localStorage.setItem('ss_prefs', JSON.stringify(prefs)); } catch (e) {} applyPrefs(); if (lastState) render(lastState); }
 function openDisplay() {
   for (const k of ['headers', 'people', 'lengths', 'seconds']) $('p_' + k).checked = !!prefs[k];
-  $('p_size').value = prefs.size; $('p_timer').value = prefs.timer || 'auto'; $('dmodal').classList.remove('hidden');
+  $('p_skin').value = prefs.skin || 'classic'; $('p_size').value = prefs.size; $('p_timer').value = prefs.timer || 'auto'; $('dmodal').classList.remove('hidden');
 }
 // What the timer spot shows: the timer (or a video while it plays), only videos, the clock, or nothing.
 function timerSlot(s, slot, label, val, sub) {
