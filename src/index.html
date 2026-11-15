@@ -153,7 +153,7 @@
   #list2 { display: none; }
   body.m.ipad .layout { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); padding: 6px 24px 20px; gap: 18px 28px; }
   body.m.ipad aside { grid-column: 1 / -1; }
-  body.m.ipad .seg { display: none; }
+  body.m.ipad #seg-all { display: none; }   /* iPad: Now | Confidence monitor (the full order is always in the right column) */
   body.m.ipad #list2 { display: block; overflow-y: auto; min-height: 0; }
   /* sized by fitOrder(): --fs is the largest text that fits every row in the column */
   body.m.ipad #list2 li.mini, body.m #order li.mini { font-size: var(--fs, 15px); padding: .32em 4px; grid-template-columns: 3.2em 1fr 3em; }
@@ -251,6 +251,46 @@
   .tvfoot { display: flex; justify-content: space-between; font-size: 1.4vw; color: var(--mute); margin-top: .8vw; }
   .tvwait { margin: auto; font-size: 3vw; color: var(--mute); text-align: center; }
 
+  /* Stage (/stage): the confidence monitor. The live slide's words as big as they fit, the next slide under it. */
+  #stage { display: none; }
+  body.stage { overflow: hidden; }
+  body.stage .top, body.stage .layout, body.stage .foot { display: none; }
+  body.stage #stage { display: grid; grid-template-rows: auto minmax(0, 1fr) minmax(0, .42fr) auto; height: 100vh; height: 100dvh;
+    padding: 12px max(16px, 2vw) 10px; gap: 10px; }
+  .sgtop { display: flex; align-items: center; gap: 16px; }
+  .sgtop .sp, .sgfoot .sp { flex: 1; }
+  .sgclock { font-size: clamp(28px, 5vw, 72px); font-weight: 300; letter-spacing: -.02em; line-height: 1; }
+  .sgclock .sec { color: var(--dim); }
+  body.no-seconds .sgclock .sec { display: none; }
+  #sgslot { text-align: right; line-height: 1.05; }
+  #sgslot .k { color: var(--mute); font-size: clamp(11px, 1.3vw, 18px); text-transform: uppercase; letter-spacing: .06em; }
+  #sgslot .v { font-size: clamp(28px, 5vw, 72px); font-weight: 650; letter-spacing: -.02em; }
+  #sgslot .v.over { color: var(--late); } #sgslot .v.vid { color: var(--acc); }
+  #sgslot .sm { color: var(--mute); font-size: clamp(11px, 1.2vw, 16px); }
+  .sgbox { position: relative; display: flex; align-items: center; justify-content: center; min-height: 0; overflow: hidden;
+    border-radius: 14px; text-align: center; }
+  .sgnow { background: #000; border: 1px solid var(--line); }
+  .sgnext { border: 1px dashed var(--line); }
+  .sgbox .tag { position: absolute; top: 8px; left: 12px; font-size: clamp(11px, 1.2vw, 16px); color: var(--mute);
+    text-transform: uppercase; letter-spacing: .06em; }
+  .sgnow .tag { color: var(--acc); }
+  .sgtext { width: 100%; padding: clamp(28px, 3.6vw, 52px) 4% clamp(10px, 1.4vw, 22px); white-space: pre-line;
+    font-weight: 650; line-height: 1.15; }
+  .sgnext .sgtext { color: var(--mute); font-weight: 550; }
+  .sgtext.empty { color: var(--dim); font-weight: 400; }
+  .sgfoot { display: flex; gap: 14px; align-items: baseline; font-size: clamp(13px, 1.6vw, 24px); color: var(--mute);
+    white-space: nowrap; overflow: hidden; }
+  .sgfoot b { color: var(--text); font-weight: 600; }
+  .sgfoot #sgup { overflow: hidden; text-overflow: ellipsis; }
+  .stagep { margin-top: 14px; } .stagep a { color: var(--acc); font-weight: 600; }
+  /* the same confidence monitor as the phone's third tab, under the clock row (so no second clock/timer) */
+  body.m .seg button { flex: 1 1 auto; white-space: nowrap; padding-left: 10px; padding-right: 10px; }
+  body.m.stagetab .order { display: flex; flex-direction: column; overflow: hidden; }
+  body.m.stagetab #list { display: none; }
+  body.m.stagetab #stage { display: grid; flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr) minmax(0, .55fr) auto; gap: 8px; }
+  body.m.stagetab .sgtop { display: none; }
+  body.m.stagetab .sgfoot { font-size: 13px; }
+
   /* settings */
   .modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
   .sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; width: 100%; max-width: 460px; }
@@ -286,7 +326,7 @@
 
 <div class="layout">
   <div class="order" id="order">
-    <div class="seg" role="tablist"><button id="seg-now" role="tab" onclick="setView('now')">Now</button><button id="seg-all" role="tab" onclick="setView('all')">Full order</button></div>
+    <div class="seg" role="tablist"><button id="seg-now" role="tab" onclick="setView('now')">Now</button><button id="seg-all" role="tab" onclick="setView('all')">Full order</button><button id="seg-stage" role="tab" onclick="setView('stage')">Confidence monitor</button></div>
     <ol id="list"><li class="wait">Connecting…</li></ol></div>
   <ol id="list2"></ol>
   <aside>
@@ -311,6 +351,14 @@
   <div><div class="tvstrip" id="tvstrip"></div><div class="tvfoot"><span id="tvdone"></span><span id="tvmpct"></span></div></div>
 </div>
 
+<div id="stage">
+  <div class="sgtop"><span class="sgclock" id="sgclock">--:--</span><span class="sp"></span>
+    <div id="sgslot"><div class="k" id="sgtl">Timer</div><div class="v" id="sgtv">—</div><div class="sm" id="sgts"></div></div></div>
+  <section class="sgbox sgnow"><span class="tag" id="sgcurtag">Now</span><div class="sgtext" id="sgcur"></div></section>
+  <section class="sgbox sgnext"><span class="tag" id="sgnexttag">Next</span><div class="sgtext" id="sgnext"></div></section>
+  <div class="sgfoot"><span id="sgitem"></span><span class="sp"></span><span id="sgup"></span></div>
+</div>
+
 <div class="modal hidden" id="dmodal" onclick="if (event.target === this) this.classList.add('hidden')">
   <div class="sheet">
     <h2>Display</h2>
@@ -331,6 +379,7 @@
     </select>
     <label for="p_size">Text size</label>
     <select id="p_size" onchange="setPref('size', this.value)"><option value="m">Normal</option><option value="l">Large</option><option value="xl">Extra large</option></select>
+    <p class="stagep">Stage view — the live slide and the next one, like the confidence monitor: open <a href="/stage" id="stagelink">/stage</a> on any phone, iPad or TV.</p>
     <div class="btns"><button type="button" class="btn primary" onclick="$('dmodal').classList.add('hidden')">Done</button></div>
   </div>
 </div>
@@ -466,23 +515,25 @@ function showVersion() {
   if ($('s_ver').innerHTML !== html) $('s_ver').innerHTML = html;
 }
 // /tv = TV, /mobile = phone/iPad; the plain address also switches to the phone/iPad layout on touch screens
-const MODE = /^\/tv/.test(location.pathname) ? 'tv'
-  : (/^\/(mobile|m)\b/.test(location.pathname) || window.matchMedia('(pointer: coarse)').matches) ? 'mobile' : 'desk';
+const MODE = /^\/tv/.test(location.pathname) ? 'tv' : /^\/stage/.test(location.pathname) ? 'stage'
+  :(/^\/(mobile|m)\b/.test(location.pathname) || window.matchMedia('(pointer: coarse)').matches) ? 'mobile' : 'desk';
 const narrow = window.matchMedia('(max-width: 820px)');
 const phone = { get matches() { return MODE === 'mobile' || narrow.matches; } };
 function setMode() {
   document.body.classList.toggle('tv', MODE === 'tv');
-  document.body.classList.toggle('m', MODE === 'mobile' || narrow.matches);
+  document.body.classList.toggle('stage', MODE === 'stage');
+  document.body.classList.toggle('m', MODE === 'mobile' || (MODE !== 'stage' && narrow.matches));
   document.body.classList.toggle('ipad', MODE === 'mobile' && window.innerWidth >= 700);
   document.body.classList.toggle('short', MODE === 'mobile' && window.innerWidth >= 700 && window.innerHeight < 560);   // phone turned sideways
 }
+if (MODE !== 'stage' && MODE !== 'tv') $('order').appendChild($('stage'));   // the phone's Confidence monitor tab shows it in the order column
 applyPrefs(); setMode(); window.addEventListener('resize', () => { setMode(); if (lastState) render(lastState); });
-if (MODE === 'tv' && navigator.wakeLock) {           // keep the TV's browser from sleeping
+if ((MODE === 'tv' || MODE === 'stage') && navigator.wakeLock) {   // keep the TV's / stage screen's browser from sleeping
   const lock = () => navigator.wakeLock.request('screen').catch(() => {});
   lock(); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') lock(); });
 }
 let view = 'now'; try { view = localStorage.getItem('tfc_view') || 'now'; } catch (e) {}
-function setView(v) { view = v; try { localStorage.setItem('tfc_view', v); } catch (e) {} if (lastState) render(lastState); }
+function setView(v) { view = v; stageKey = ''; try { localStorage.setItem('tfc_view', v); } catch (e) {} if (lastState) render(lastState); }
 const tcls = r => r.actual ? '' : (r.proj_late == null ? '' : (r.proj_late >= 120 ? 'late' : (r.proj_late <= -120 ? 'early' : '')));
 // phone: just what's on now, what's next, and the two after that
 function nowNext(s, rows, cur) {
@@ -552,6 +603,7 @@ function nowPanel(s, r) {
 function render(s) {
   lastState = s;
   if (MODE === 'tv') return renderTV(s);
+  if (MODE === 'stage') return renderStage(s);
   const cm = (s.now || '').replace(/\s?[AP]M$/i, '').match(/^(\d+:\d\d)(:\d\d)?/);
   $('clock').innerHTML = cm ? cm[1] + '<span class="sec">' + (cm[2] || '') + '</span>' : '--:--';
   $('svc').textContent = s.service ? s.service + ' Service' : 'Service';
@@ -601,7 +653,11 @@ function render(s) {
   if (curIdx < 0 && (s.message || s.deck || s.video)) html = '<li class="now">' + nowPanel(s, null) + '</li>' + html;
   if (phone.matches && rows.length) html = (view === 'all' && !document.body.classList.contains('ipad')) ? miniOrder(rows, curIdx) : nowNext(s, rows, curIdx);
   if (document.body.classList.contains('ipad')) $('list2').innerHTML = rows.length ? miniOrder(rows, curIdx) : '';
-  $('seg-now').className = view === 'now' ? 'on' : ''; $('seg-all').className = view === 'all' ? 'on' : '';
+  const ipad = document.body.classList.contains('ipad');
+  $('seg-now').className = view === 'now' || (ipad && view === 'all') ? 'on' : ''; $('seg-all').className = view === 'all' ? 'on' : ''; $('seg-stage').className = view === 'stage' ? 'on' : '';
+  const stageTab = phone.matches && view === 'stage';
+  if (document.body.classList.contains('stagetab') !== stageTab) { document.body.classList.toggle('stagetab', stageTab); stageKey = ''; }
+  if (stageTab) renderStage(s);
   if (!html) html = '<li class="wait">Waiting for ProPresenter' + (s.pco?.enabled ? '' : ' (add Planning Center in Settings to see the order of service)') + '</li>';
   $('list').innerHTML = html;
   fitOrder(document.body.classList.contains('ipad') ? $('list2') : (phone.matches && view === 'all' ? $('order') : null));
@@ -685,6 +741,57 @@ function renderTV(s) {
   $('tvstrip').innerHTML = st;
   const left = tl.filter(x => rows.indexOf(x) > cur).length;
   $('tvdone').textContent = cur >= 0 ? (left ? left + ' item' + (left > 1 ? 's' : '') + ' after this' : 'Last item') : '';
+}
+
+// ---------------------------------------------------------------- Stage (confidence monitor)
+// Largest font size at which the text fits its box with no scrolling (binary search, like fitOrder).
+function fitText(el) {
+  const box = el.parentNode, H = box.clientHeight, W = box.clientWidth;
+  if (!H || !W) return;
+  const fits = () => el.scrollHeight <= H && el.scrollWidth <= el.clientWidth + 1;
+  let lo = 10, hi = Math.max(12, Math.min((H - 30) / 1.15, W / 5));
+  el.style.fontSize = hi + 'px';
+  if (fits()) return;
+  for (let i = 0; i < 9; i++) {
+    const mid = (lo + hi) / 2; el.style.fontSize = mid + 'px';
+    if (fits()) lo = mid; else hi = mid;
+  }
+  el.style.fontSize = Math.floor(lo) + 'px';
+}
+let stageKey = '';
+function renderStage(s) {
+  const cm = (s.now || '').replace(/\s?[AP]M$/i, '').match(/^(\d+:\d\d)(:\d\d)?/);
+  $('sgclock').innerHTML = cm ? cm[1] + '<span class="sec">' + (cm[2] || '') + '</span>' : '--:--';
+  timerSlot(s, 'sgslot', 'sgtl', 'sgtv', 'sgts');
+  withSections(s);
+  const sl = s.slide || {}, m = s.message, dk = s.deck;
+  const rows = (s.rundown || []).filter(r => r.type !== 'header');
+  const cur = rows.findIndex(r => r.current), r = cur >= 0 ? rows[cur] : null;
+  const up = rows.slice(cur + 1).find(x => x.planned || x.proj) || rows[cur + 1] || null;
+  // the live slide, or what's up instead of words (a video, a blank slide, nothing yet)
+  let now = sl.current || '', nowEmpty = false;
+  if (!s.pp || !s.pp.ok) { now = 'Waiting for ProPresenter…'; nowEmpty = true; }
+  else if (!now) { now = s.video ? 'Video · ' + mmss(s.video.left) + ' left' : (sl.deck ? sl.deck + ' — no words on this slide' : 'Nothing up yet'); nowEmpty = true; }
+  let next = sl.next || '', nextEmpty = false;
+  if (!next) { next = up ? 'Next item: ' + splitTitle(up.title).name : (sl.deck ? 'End of ' + sl.deck : ''); nextEmpty = true; }
+  $('sgcurtag').textContent = 'Now' + (sl.group ? ' · ' + sl.group : '') + (m && m.point_now ? ' · ' + m.point_now : '');
+  $('sgnexttag').textContent = 'Next' + (sl.next && sl.next_group && sl.next_group !== sl.group ? ' · ' + sl.next_group : '');
+  const key = now + '\u0000' + next + '\u0000' + window.innerWidth + 'x' + window.innerHeight;
+  if (key !== stageKey) {
+    stageKey = key;
+    const a = $('sgcur'), b = $('sgnext');
+    a.textContent = now; a.className = 'sgtext' + (nowEmpty ? ' empty' : '');
+    b.textContent = next; b.className = 'sgtext' + (nextEmpty ? ' empty' : '');
+    fitText(a); fitText(b);
+    if (!a.parentNode.clientHeight) stageKey = '';   // not on screen yet (hidden tab): size it once it shows
+  }
+  // footer: which item and how far through it; then what's after it in the order
+  const title = r ? r.title : (m ? m.name : (s.current_item || sl.deck || ''));
+  let where = '';
+  if (m) where = Math.round(m.pct) + '% through';
+  else if (dk) where = 'slide ' + (dk.index + 1) + '/' + dk.count;
+  $('sgitem').innerHTML = title ? '<b>' + esc(pretty(title)) + '</b>' + (where ? ' · ' + esc(where) : '') : '';
+  $('sgup').innerHTML = up ? 'Then ' + (up.proj || up.planned ? '<span class="' + tcls(up) + '">' + esc(up.proj || up.planned) + '</span> ' : '') + itemLabel(up) : '';
 }
 
 async function tick() {

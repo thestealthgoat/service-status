@@ -390,6 +390,15 @@ function buildState(cfg, pp, pco, store) {
   for (const g of pres.groups || []) for (const s of g.slides || [])
     slides.push({ group: g.name || '', label: s.label || '', text: (s.text || '').trim() });
 
+  // stage view (/stage): the live slide's text and the next one's, like the confidence monitor.
+  // ProPresenter's own status/slide first; the deck's slides as a fallback when it doesn't send any.
+  {
+    const ss = pp.status_slide || {}, at = i => (cur !== null && slides[i]) || null;
+    const txt = (x, i) => (x && typeof x.text === 'string' ? x.text : (at(i) ? at(i).text : '')).replace(/\r\n?/g, '\n').trim();
+    state.slide = { current: txt(ss.current, cur), next: txt(ss.next, cur === null ? -1 : cur + 1),
+      group: at(cur) ? at(cur).group : '', next_group: at(cur + 1) ? at(cur + 1).group : '', deck: pid.name || '' };
+  }
+
   // message
   // Is the deck that's up the message? Any of: the deck name matches the optional pattern, the playlist item is called
   // message/sermon/teaching, or Planning Center's current item is the message (from the last second's tracking).
@@ -764,7 +773,7 @@ class StatusService {
       res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'max-age=86400' });
       return res.end(buf);
     }
-    if (req.url === '/' || req.url.startsWith('/index.html') || req.url.startsWith('/?') || /^\/(tv|mobile|m)\/?(\?|$)/.test(req.url))
+    if (req.url === '/' || req.url.startsWith('/index.html') || req.url.startsWith('/?') || /^\/(tv|stage|mobile|m)\/?(\?|$)/.test(req.url))
       return send(200, 'text/html; charset=utf-8', fs.readFileSync(this.htmlPath));
     send(404, 'text/plain', 'not found');
   }
