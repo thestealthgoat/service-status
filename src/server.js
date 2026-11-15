@@ -275,8 +275,8 @@ const TRACK = { msgPct: {}, msgUuid: null, msgStarted: null, msgStarts: {}, svcK
 // item runs long, and projections use real lengths (earlier service today, else the median of past Sundays).
 class RunStore {
   constructor(file) {
-    this.file = file; this.data = { days: {}, avg: {} }; this.dirty = false;
-    if (file) { try { this.data = { days: {}, avg: {}, ...JSON.parse(fs.readFileSync(file, 'utf8')) }; } catch { /* first run */ } }
+    this.file = file; this.data = { days: {}, avg: {}, loops: {} }; this.dirty = false;
+    if (file) { try { this.data = { days: {}, avg: {}, loops: {}, ...JSON.parse(fs.readFileSync(file, 'utf8')) }; } catch { /* first run */ } }
     const ds = Object.keys(this.data.days).sort(); while (ds.length > 21) delete this.data.days[ds.shift()];
   }
   day(d) { return (this.data.days[d] ||= {}); }
@@ -293,6 +293,9 @@ class RunStore {
     if (!demo && !runs.rehearsal && k && !r.learned && secs >= 5 && secs <= 3 * (row.length || 600) + 600) { r.learned = 1; this.addAvg(k, secs); }
   }
   addAvg(k, secs) { const a = (this.data.avg[k] ||= []); a.push(Math.round(secs)); while (a.length > 8) a.shift(); this.dirty = true; }
+  // videos seen looping (pre-service loops, motion backgrounds), by ProPresenter media id: remembered across Sundays
+  markLoop(k) { if (k && !this.data.loops[k]) { this.data.loops[k] = Date.now(); this.dirty = true; } }
+  isLoop(k) { return !!(k && this.data.loops && this.data.loops[k]); }
   median(k) { const a = (this.data.avg[k] || []).slice().sort((x, y) => x - y); if (a.length < 2) return null; const m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; }
   save() {
     if (!this.file || !this.dirty) return; this.dirty = false;
@@ -391,7 +394,9 @@ function hourName(d) { const h = d.getHours(); return `${((h + 11) % 12) + 1}${h
 // or from the media's length minus where it's up to. When it stops, the screen goes back to the normal timer.
 const VID = {};
 function num(v) { if (typeof v === 'number') return v; if (v && typeof v === 'object') { for (const k of ['time', 'seconds', 'value']) if (typeof v[k] === 'number') return v[k]; } return null; }
-function videoState(pp, now) {
+// ProPresenter doesn't say whether a video loops, so watch for it: the same video's playhead jumping from its last
+// couple of seconds back to the start is a loop. Remembered in the run store, so next week it's known from the first frame.
+function videoState(pp, now, store = null) {
   const layers = [['presentation', pp.tp_time, pp.tp_cur], ['announcement', pp.ta_time, pp.ta_cur]];
   let best = null;
   for (const [layer, tRaw, cur] of layers) {
@@ -399,8 +404,10 @@ function videoState(pp, now) {
     const c = cur && typeof cur === 'object' ? cur : {};
     const name = c.name || c.id?.name || c.media?.name || '';
     const dur = num(c.duration) ?? num(c.length) ?? num(c.media?.duration);
+    const key = c.uuid || name;
     const v = (VID[layer] ||= { t: null, moved: 0, name: '' });
-    if (v.name !== name) { v.name = name; v.moved = 0; }
+    if (v.name !== name) { v.name = name; v.moved = 0; v.t = null; }
+    else if (store && dur && v.t !== null && v.t >= dur - 2.5 && t < v.t - 2 && t < 3) store.markLoop(key);
     if (v.t !== null && Math.abs(t - v.t) > 0.05) v.moved = now;
     v.t = t;
     const playing = v.moved && now - v.moved < 2500;
@@ -410,10 +417,16 @@ function videoState(pp, now) {
     if (left === null || left <= 0.5) continue;
     const total = dur || (t + left);
     const out = { layer, name: String(name).replace(/\.(mp4|mov|m4v|mxf|avi|mkv|webm)$/i, ''), left: Math.round(left), total: Math.round(total),
-      pct: Math.max(0, Math.min(100, 100 * t / total)), ends: clock(new Date(now + left * 1000)) };
+      pct: Math.max(0, Math.min(100, 100 * t / total)), ends: clock(new Date(now + left * 1000)), loop: !!(store && store.isLoop(key)) };
     if (!best || layer === 'presentation') best = out;
   }
   return best;
+}
+// Does this video decide when the current item ends? Not a loop, and not much shorter than the item it plays in
+// (a 30 s motion background under a 7 min song, a 2 min loop in a 30 min pre-service). A real video item counts.
+function videoCounts(video, expectedSecs) {
+  if (!video || video.loop) return false;
+  return !(expectedSecs > 0 && video.total < 0.5 * expectedSecs);
 }
 
 function buildState(cfg, pp, pco, store) {
@@ -465,7 +478,8 @@ function buildState(cfg, pp, pco, store) {
   }
   // timers
   state.timers = (pp.timers || []).map(t => ({ name: t.id?.name || t.name, time: t.time, state: t.state }));
-  state.video = videoState(pp, now);
+  state.video = videoState(pp, now, store);
+  if (state.video && state.video.loop) state.video = null;    // a looping video never "ends": keep the normal timer and times
   state.message_timer = (cfg.message_timer_name ? state.timers.find(t => t.name === cfg.message_timer_name)
     : (state.timers.find(t => MSG_WORDS.test(t.name || '')) || state.timers.find(t => t.state === 'running' && parseClock(t.time) !== null))) || null;
   if (state.message_timer) state.message_timer_label = state.message_timer.name || 'Timer';
@@ -603,6 +617,7 @@ function buildState(cfg, pp, pco, store) {
     state.current_item_elapsed = fmtSecs(el);
     state.current_item_el_s = Math.round(el); state.current_item_len_s = r.length || 0;
     state.current_item_started = clock(new Date(A));
+    if (state.video && !videoCounts(state.video, expected(curRow))) state.video = null;   // a background, not this item's video
     // projected times for what's left
     let t = TRACK.done ? TRACK.lastSeen : A + Math.max(expected(curRow), el) * 1000;
     if (!TRACK.done && isMsgRow(curRow) && msg?.projected_ts) t = Math.max(now, msg.projected_ts);
@@ -834,7 +849,7 @@ class StatusService {
   stop() { clearTimeout(this.timer); this.server?.close(); }
 }
 
-module.exports = { StatusService, DEFAULTS, buildState, RunStore, TRACK, PCO, simName, alignOrder, manualActive, manualTimes };
+module.exports = { StatusService, DEFAULTS, buildState, RunStore, TRACK, PCO, simName, alignOrder, manualActive, manualTimes, videoState, videoCounts };
 
 if (require.main === module) {   // node server.js [--demo]
   const svc = new StatusService(path.join(__dirname, 'dev-config.json'), path.join(__dirname, 'index.html'));
