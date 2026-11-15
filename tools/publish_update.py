@@ -24,7 +24,11 @@ try:
     subprocess.run(['node', str(ROOT / 'tools' / 'compat.js'), str(ROOT / 'src' / 'index.html'), str(out / 'index.html')], check=True)
 except Exception as e:
     print('WARNING: compat step skipped (' + str(e) + ') -- shipping the page as written', file=sys.stderr)
+# checksums are taken AFTER the compat step so they match the files actually shipped
+for f in ('server.js', 'index.html'):
     files[f] = {'url': RAW + f'update/files/{ver}/{f}', 'sha256': hashlib.sha256((out / f).read_bytes()).hexdigest()}
+if set(files) != {'server.js', 'index.html'}:
+    sys.exit('ERROR: update feed would be missing files: ' + str(sorted(files)))
 latest = {'version': ver, 'min_shell': min_shell, 'notes': notes, 'files': files}
 (ROOT / 'update' / 'latest.json').write_text(json.dumps(latest, indent=2) + '\n')
 print(json.dumps(latest, indent=2))
