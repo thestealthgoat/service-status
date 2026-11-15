@@ -460,6 +460,12 @@
     <p class="help" id="s_opts_err"></p>
     <h3>App</h3>
     <p class="help" id="s_ver">Version —</p>
+    <div id="s_shell21" class="hidden">
+      <label for="s_channel">Updates</label>
+      <select id="s_channel"><option value="stable">Stable — new versions once they've been tried</option><option value="beta">Beta — new versions first (use on one booth computer)</option></select>
+      <div class="chk"><input type="checkbox" id="s_login"><label for="s_login" style="margin:0">Launch at login (starts with this Mac)</label></div>
+      <p class="help">Downloaded updates install themselves overnight, between 3 and 5 AM, never within 2 hours of a service.</p>
+    </div>
     <div class="chk"><input type="checkbox" id="s_demo"><label for="s_demo" style="margin:0">Demo mode (fake data, for trying it out)</label></div>
     <div class="btns"><button type="button" class="btn" onclick="closeSettings()">Cancel</button><button class="btn primary">Save</button></div>
   </form>
@@ -944,6 +950,9 @@ async function openSettings(first) {
   $('s_host').value = c.pp_host; $('s_port').value = c.pp_port; $('s_app').value = c.pco_app_id || '';
   $('s_secret').value = ''; $('s_secret').placeholder = c.pco_secret_set ? 'saved — leave blank to keep' : '';
   $('s_demo').checked = !!c.demo; $('modal').classList.remove('hidden');
+  const v21 = /^(\d+)\.(\d+)/.exec(c.shell || '') || [];
+  $('s_shell21').classList.toggle('hidden', !(+v21[1] > 2 || (+v21[1] === 2 && +v21[2] >= 1)));   // 2.1+ shell only
+  $('s_channel').value = c.update_channel || 'stable'; $('s_login').checked = c.launch_at_login !== false;
   showVersion(); fillOptions(c);
 }
 async function fillOptions(c) {       // service types from their Planning Center, timers from their ProPresenter
@@ -968,7 +977,8 @@ async function saveSettings(e) {
   await fetch('/api/settings', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({
     pp_host: $('s_host').value.trim() || '127.0.0.1', pp_port: $('s_port').value, pco_app_id: $('s_app').value.trim(),
     pco_secret: $('s_secret').value.trim(), pco_service_type_id: $('s_st').value || null, message_timer_name: $('s_timer').value,
-    demo: $('s_demo').checked, pco_manual: manualPayload() }) });
+    demo: $('s_demo').checked, pco_manual: manualPayload(),
+    ...($('s_shell21').classList.contains('hidden') ? {} : { update_channel: $('s_channel').value, launch_at_login: $('s_login').checked }) }) });
   closeSettings();
 }
 async function clearPco() {

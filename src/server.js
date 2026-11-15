@@ -898,14 +898,21 @@ class StatusService {
     return c;
   }
   saveConfig(patch) {
-    const allowed = ['pp_host', 'pp_port', 'page_port', 'pco_app_id', 'pco_secret', 'pco_service_type_id', 'message_timer_name', 'demo', 'pco_manual'];
+    const allowed = ['pp_host', 'pp_port', 'page_port', 'pco_app_id', 'pco_secret', 'pco_service_type_id', 'message_timer_name', 'demo', 'pco_manual',
+      'update_channel', 'launch_at_login'];
     for (const k of allowed) if (k in patch) this.cfg[k] = patch[k];
     this.cfg.pp_port = parseInt(this.cfg.pp_port, 10) || DEFAULTS.pp_port;
     this.cfg.pco_service_type_id = parseInt(this.cfg.pco_service_type_id, 10) || null;
+    this.cfg.update_channel = this.cfg.update_channel === 'beta' ? 'beta' : 'stable';
     this.cfg.setup_done = true;
     fs.mkdirSync(path.dirname(this.configPath), { recursive: true });
     fs.writeFileSync(this.configPath, JSON.stringify(this.cfg, null, 2));
     this.rebuildClients();
+    if (this.onConfigChange) { try { this.onConfigChange(this.cfg); } catch (e) { console.error('config change', e); } }   // the 2.1 shell: login item, update channel
+  }
+  // today's service start times from the plan on screen (the shell won't apply an update overnight within 2 h of one)
+  nextServiceStarts() {
+    return ((this.pcoPlan && this.pcoPlan.times) || []).map(t => new Date(t.starts_at)).filter(d => !isNaN(d));
   }
   rebuildClients() { this.pp = new ProPresenter(this.cfg); this.pco = new PCO(this.cfg); }
   runsFor() {   // demo mode never touches the real history
@@ -923,6 +930,7 @@ class StatusService {
         ppSnap = await this.pp.snapshot(); pcoPlan = this.pco.pickNow(ppSnap);
         if (ppSnap.ok) { this.videos.refresh(this.pp, ppSnap.playlist && ppSnap.playlist.items); ppSnap.video_lengths = this.videos.byDoc; }
       }
+      this.pcoPlan = pcoPlan;
       this.state = buildState(this.cfg, ppSnap, pcoPlan, this.runsFor());
       this.runsFor().save();
     } catch (e) { this.state = { fatal: String(e), now: clockSec(new Date()) }; }
@@ -932,7 +940,9 @@ class StatusService {
     const c = this.cfg;
     return { pp_host: c.pp_host, pp_port: c.pp_port, page_port: c.page_port, pco_app_id: c.pco_app_id,
       pco_secret_set: !!c.pco_secret, pco_service_type_id: c.pco_service_type_id, message_timer_name: c.message_timer_name || '', demo: !!c.demo,
-      pco_manual: manualActive(c.pco_manual) ? c.pco_manual : null };
+      pco_manual: manualActive(c.pco_manual) ? c.pco_manual : null,
+      update_channel: c.update_channel === 'beta' ? 'beta' : 'stable', launch_at_login: c.launch_at_login !== false,
+      shell: (this.update && this.update.shell) || null };           // Settings shows the 2.1 controls only on a 2.1+ shell
   }
   start() {
     const loop = async () => { await this.poll(); this.timer = setTimeout(loop, 1000); };

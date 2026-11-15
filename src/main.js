@@ -8,12 +8,13 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 
-const FEED = 'https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/latest.json';
+const { feedUrl, feedFallback, quietToApply } = require('./shell');
 const RELEASES = 'https://github.com/thestealthgoat/service-status/releases';
 const CODE_FILES = ['server.js', 'index.html'];
+const QUIET = process.argv.includes('--quiet');      // restarted overnight to apply an update: don't come to the front
 
 let service = null, win = null, port = null;
-const update = { shell: app.getVersion(), running: app.getVersion(), status: 'idle', latest: null, ready: null, error: null, checked: null, notes: null };
+const update = { shell: app.getVersion(), running: app.getVersion(), status: 'idle', latest: null, ready: null, error: null, checked: null, notes: null, channel: 'stable' };
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
@@ -50,8 +51,12 @@ async function getBuf(url) {
 async function checkForUpdate(manual) {
   if (update.status === 'checking' || update.status === 'downloading') return;
   update.status = 'checking'; update.error = null;
+  update.channel = (service && service.cfg && service.cfg.update_channel) === 'beta' ? 'beta' : 'stable';
   try {
-    const feed = JSON.parse((await getBuf(FEED + '?t=' + Date.now())).toString('utf8'));
+    let raw;
+    try { raw = await getBuf(feedUrl(update.channel) + '?t=' + Date.now()); }
+    catch (e) { const fb = feedFallback(update.channel); if (!fb || !/HTTP 404/.test(e.message)) throw e; raw = await getBuf(fb + '?t=' + Date.now()); }   // no beta.json yet
+    const feed = JSON.parse(raw.toString('utf8'));
     update.latest = feed.version; update.notes = feed.notes || null; update.checked = new Date().toISOString();
     if (!newer(feed.version, update.running) || (update.ready && !newer(feed.version, update.ready))) {
       update.status = update.ready ? 'ready' : 'current';
@@ -89,14 +94,20 @@ async function checkForUpdate(manual) {
   }
 }
 function restartApp() { app.relaunch(); app.exit(0); }
+// Overnight: apply a downloaded update without bringing the window to the front (relaunch with --quiet).
+function quietRestart() { app.relaunch({ args: [...process.argv.slice(1).filter(a => a !== '--quiet'), '--quiet'] }); app.exit(0); }
+function applyLoginItem(cfg) {     // start with the Mac (Settings → Launch at login, on unless switched off)
+  try { app.setLoginItemSettings({ openAtLogin: !cfg || cfg.launch_at_login !== false }); } catch (e) { console.error('login item', e); }
+}
 
 // ---------------------------------------------------------------- window
 function createWindow() {
   win = new BrowserWindow({
     width: 1200, height: 860, minWidth: 380, minHeight: 500,
-    title: 'Service Status', backgroundColor: '#0e0f12',
+    title: 'Service Status', backgroundColor: '#0e0f12', show: !QUIET,
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   });
+  if (QUIET) win.once('ready-to-show', () => win.showInactive());   // back on screen, but ProPresenter keeps the focus
   win.loadURL(`http://127.0.0.1:${port}/`);
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('context-menu', (_e, p) => {
@@ -114,6 +125,8 @@ app.whenReady().then(async () => {
   service = new StatusService(cfgPath, path.join(code.dir, 'index.html'));
   service.update = update;                                   // shown in Settings
   service.onUpdateAction = a => { if (a === 'restart') restartApp(); else if (a === 'check') checkForUpdate(false); else if (a === 'installer') shell.openExternal(RELEASES); };
+  service.onConfigChange = cfg => { applyLoginItem(cfg); if (cfg.update_channel !== update.channel) checkForUpdate(false); };
+  applyLoginItem(service.cfg);
   try {
     port = await service.start();
   } catch (e) {
@@ -130,9 +143,14 @@ app.whenReady().then(async () => {
     { role: 'editMenu' }, { role: 'windowMenu' }]));
   createWindow();
   app.on('activate', () => { if (!win) createWindow(); });
-  // check shortly after launch, then every 6 hours; updates download quietly and apply on the next start
+  // check shortly after launch, then every 6 hours; updates download quietly and apply on the next start,
+  // or by themselves overnight (3–5 AM, not within 2 h of a service) with a restart that stays in the background
   setTimeout(() => checkForUpdate(false), 15000);
   setInterval(() => checkForUpdate(false), 6 * 3600 * 1000);
+  setInterval(() => {
+    const starts = typeof service.nextServiceStarts === 'function' ? service.nextServiceStarts() : [];
+    if (update.status === 'ready' && quietToApply(new Date(), starts)) quietRestart();
+  }, 10 * 60 * 1000);
 });
 
 // Closing the window keeps the app (and the phone page) running; Cmd+Q quits.

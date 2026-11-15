@@ -11,8 +11,10 @@ Changes to main.js, package.json or Electron need a new installer: also set "min
 import hashlib, json, pathlib, shutil, sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 RAW = 'https://raw.githubusercontent.com/thestealthgoat/service-status/main/'
-ver, notes = sys.argv[1], (sys.argv[2] if len(sys.argv) > 2 else '')
-min_shell = sys.argv[3] if len(sys.argv) > 3 else '2.0.0'
+BETA = '--beta' in sys.argv          # --beta: only computers set to Updates → Beta get it (python3 tools/promote.py moves it to Stable)
+args = [a for a in sys.argv[1:] if a != '--beta']
+ver, notes = args[0], (args[1] if len(args) > 1 else '')
+min_shell = args[2] if len(args) > 2 else '2.0.0'
 out = ROOT / 'update' / 'files' / ver
 out.mkdir(parents=True, exist_ok=True)
 files = {}
@@ -30,5 +32,7 @@ for f in ('server.js', 'index.html'):
 if set(files) != {'server.js', 'index.html'}:
     sys.exit('ERROR: update feed would be missing files: ' + str(sorted(files)))
 latest = {'version': ver, 'min_shell': min_shell, 'notes': notes, 'files': files}
-(ROOT / 'update' / 'latest.json').write_text(json.dumps(latest, indent=2) + '\n')
+feed = ROOT / 'update' / ('beta.json' if BETA else 'latest.json')
+feed.write_text(json.dumps(latest, indent=2) + '\n')
 print(json.dumps(latest, indent=2))
+print(f'wrote {feed.relative_to(ROOT)} ({"Beta" if BETA else "Stable"})')
