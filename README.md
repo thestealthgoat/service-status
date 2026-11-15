@@ -12,23 +12,35 @@ A live **“where are we in the service?”** screen for the production booth, i
 - **Read-only:** it never changes anything in ProPresenter or Planning Center.
 
 ## Install (Mac)
-1. Download **Service Status Installer.pkg** from [Releases](https://github.com/thestealthgoat/service-status/releases) — one installer for Intel and Apple Silicon.
-2. Open it. The first time, macOS may say it can’t check it: System Settings → Privacy & Security → **Open Anyway**.
-3. The app opens when it’s done. Its welcome screen asks for ProPresenter’s network port and (optionally) a Planning Center Personal Access Token.
-4. The installer may be an older version than the newest app code. That’s fine: a few seconds after it opens, the app downloads the newest code by itself. Restart it once (Cmd+Q, then open it again) to use it.
+1. Download **Service Status Installer.pkg** from the [latest release](https://github.com/thestealthgoat/service-status/releases/latest). It's one installer for Intel and Apple Silicon, signed and notarized by Apple, so it opens with no security warning.
+2. Open it and follow the steps. The app opens when it's done; its welcome screen asks for ProPresenter's network port and, optionally, a Planning Center Personal Access Token.
+3. That's it. It starts with the Mac (Settings → **Launch at login**) and keeps itself up to date.
+
+Already on 2.0? It keeps updating itself as before. Install 2.1 when convenient to get overnight updates, Launch at login and the Beta channel; your settings and history carry over.
 
 ## Updates
-The app checks this repo (`update/latest.json`) every few hours and from **Service Status → Check for Updates…**. New code downloads in the background, is checked against its SHA-256, and is used after the next restart — no reinstall.
+The app checks this repo every few hours (and from **Service Status → Check for Updates…**). New code downloads in the background and is checked against its SHA-256. On 2.1 it installs itself overnight, between 3 and 5 AM and never within 2 hours of a service, without bringing the window forward. You can also press **Restart** to use it right away.
 
-To publish: edit `src/`, run the tests (`node --test tests/`), then `python3 tools/publish_update.py <version> "notes"`, commit and push. The publish step rewrites the page for older phone browsers with esbuild, so it needs Node and `npm install --no-save esbuild` in the repo first. Without them it warns and ships the page unconverted, which older Android phones can’t run.
+**Settings → Updates:** **Stable** (the default) or **Beta**. Put one booth computer on Beta: new versions reach it first, and everyone else gets them once they're promoted.
+
+To publish (needs Node and `npm install --no-save esbuild` in the repo, for the older-phone step):
+- run the tests: `node --test tests/`
+- Beta first: `python3 tools/publish_update.py <version> "notes" --beta`, then commit and push
+- when it's proven: `python3 tools/promote.py` (copies Beta to Stable), then commit and push
+- `python3 tools/publish_update.py <version> "notes"` without `--beta` publishes straight to Stable.
 
 ## Build the installer
-On a Mac, put the packaged app zips next to `installer/Build Installers.command` and double-click it (uses Apple’s `codesign`, `pkgbuild`, `productbuild`). The app is ad-hoc signed, not notarized.
+Only needed when the app shell changes (`src/main.js`, `src/shell.js`, Electron). Run `tools/build_installer.sh <electron version>` on a Mac with:
+- `npm install --no-save @electron/packager@20.3.0`
+- the Developer ID Application and Developer ID Installer certificates (plus Apple's Developer ID G2 intermediate) in the login keychain
+- a notary login saved as keychain profile `service-status` (`xcrun notarytool store-credentials`)
+
+It packages both architectures, signs with the hardened runtime (`installer/entitlements.plist`), notarizes and staples the apps and the installer, and runs Apple's checks. The output is in `dist/<version>/`.
 
 ## Layout
-- `src/` — the app (Electron shell `main.js`, status engine `server.js`, page `index.html`)
-- `installer/` — installer build script, welcome/finish pages, artwork
-- `update/` — the update feed and versioned app code
-- `tools/publish_update.py` — publish a new version to the updater (`tools/compat.js` is its older-browser step)
+- `src/`: the app (Electron shell `main.js` + `shell.js`, status engine `server.js`, page `index.html`)
+- `installer/`: welcome and finish pages, artwork, entitlements
+- `update/`: the update feeds (`latest.json` Stable, `beta.json` Beta) and versioned app code
+- `tools/`: `publish_update.py` publishes a version (with `compat.js` as its older-browser step); `promote.py` moves Beta to Stable; `build_installer.sh` (with `package_app.mjs`) builds the signed installer
 - `tests/` — unit tests (`node --test tests/`)
 - `docs/superpowers/` — design notes and plans for larger changes

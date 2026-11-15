@@ -1,15 +1,15 @@
 {
-  "version": "2.0.18",
+  "version": "2.1.0",
   "min_shell": "2.0.0",
-  "notes": "Back-to-back videos count down as one: while Church News plays, the timer shows the time left across Church News, At the Movies and the bumper, and when the message starts.",
+  "notes": "2.1.0: Settings now has Updates (Stable or Beta) and Launch at login when you're on the 2.1 installer, which also installs updates by itself overnight and opens without a security warning. Get it from the Releases page.",
   "files": {
     "server.js": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.18/server.js",
-      "sha256": "2493cb01c8bee61dd66e63e70d56b6090ac4189e47b09d0787cc01382d7b44e4"
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.1.0/server.js",
+      "sha256": "53846a1d7c423ff60c5eb2b9ab7257c62e7a44d6d5037cd21c12951f429b1de2"
     },
     "index.html": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.18/index.html",
-      "sha256": "bc5a01eb4a50b65ddd0353ae28ebd1a4eaec9f3bc012da52fca43d50f403f244"
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.1.0/index.html",
+      "sha256": "f048f982f34067eb489f9bbd132b5e339adc1b959ba6c1e3aef5c9a24c11d335"
     }
   }
 }
