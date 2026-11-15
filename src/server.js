@@ -450,6 +450,18 @@ const backMoveAllowed = (curStart, now, unlock) => !!unlock || now - curStart < 
 // Is this the item's own video (show its length)? At least a quarter of the planned length: Church News 1:37 in a
 // 4:00 slot is; a 12 s name video, a pre-service loop in a 20 min block or a song's motion background is not.
 const videoIsItem = (secs, plannedSecs) => !(plannedSecs > 0 && secs < 0.25 * plannedSecs);
+// Back-to-back video items (Church News, At the Movies, the bumper) count down as one: the playing video's time left
+// plus each following item with a known video length, up to the first item without one. No gap is added between them.
+function videoChain(rows, curRow, left) {
+  if (curRow === null || curRow === undefined || !rows[curRow]) return null;
+  const names = [rows[curRow].title]; let total = left, next = null;
+  for (let j = curRow + 1; j < rows.length; j++) {
+    const r = rows[j]; if (r.type === 'header') continue;
+    if (!r.video_len) { next = r.title; break; }
+    total += r.video_len; names.push(r.title);
+  }
+  return { left: Math.round(total), names, next };
+}
 
 // ---- message %: a fixed weight per kind of slide instead of every slide counting the same (no learning).
 // He talks longer on a point than while reading through a passage. Kinds come from the slide labels and groups
@@ -779,6 +791,10 @@ function buildState(cfg, pp, pco, store) {
     state.current_item = r.title; state.current_item_desc = r.desc || ''; state.current_item_type = r.type || '';
     if (state.video && !videoCounts(state.video, expected(curRow))) state.video = null;   // a background, not this item's video
     if (state.video) r.video_len = state.video.total;    // playing now: ProPresenter's own length for it wins
+    if (state.video) {                                    // more videos straight after this one: one combined countdown
+      const c = videoChain(rows, curRow, state.video.left);
+      if (c && c.names.length > 1) state.video.chain = { ...c, ends: clock(new Date(now + c.left * 1000)) };
+    }
     state.current_item_length = fmtSecs(r.video_len || r.length || 0);
     state.current_item_elapsed = fmtSecs(el);
     state.current_item_el_s = Math.round(el); state.current_item_len_s = r.video_len || r.length || 0;
@@ -1022,7 +1038,7 @@ class StatusService {
   stop() { clearTimeout(this.timer); this.server?.close(); }
 }
 
-module.exports = { StatusService, DEFAULTS, buildState, RunStore, TRACK, PCO, simName, alignOrder, manualActive, manualTimes, videoState, videoCounts, advanceFar, backMoveAllowed, videoIsItem, slideKinds, slideWeights, weightedPos, mp4Duration, videoFilesFromIndex, videoFilesFromPro, VideoLengths };
+module.exports = { StatusService, DEFAULTS, buildState, RunStore, TRACK, PCO, simName, alignOrder, manualActive, manualTimes, videoState, videoCounts, advanceFar, backMoveAllowed, videoIsItem, videoChain, slideKinds, slideWeights, weightedPos, mp4Duration, videoFilesFromIndex, videoFilesFromPro, VideoLengths };
 
 if (require.main === module) {   // node server.js [--demo]
   const svc = new StatusService(path.join(__dirname, 'dev-config.json'), path.join(__dirname, 'index.html'));

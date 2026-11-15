@@ -1,15 +1,15 @@
 {
-  "version": "2.0.17",
+  "version": "2.0.18",
   "min_shell": "2.0.0",
-  "notes": "Real video lengths: video items like Church News, At the Movies, the pre-roll and the bumper show the video's real length (\u25b6) from ProPresenter, before the service. Furthest point wins: going back to an earlier slide or song no longer pulls progress backwards, with an Unlock button (tap twice) to snap to what's live. The message % weighs points more than scripture slides. Phones no longer scroll sideways when an item title is long.",
+  "notes": "Back-to-back videos count down as one: while Church News plays, the timer shows the time left across Church News, At the Movies and the bumper, and when the message starts.",
   "files": {
     "server.js": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.17/server.js",
-      "sha256": "90911698ea096b632c84d75e1cc024ac6c48a8ac8dd3cceca1f54febc3348898"
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.18/server.js",
+      "sha256": "2493cb01c8bee61dd66e63e70d56b6090ac4189e47b09d0787cc01382d7b44e4"
     },
     "index.html": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.17/index.html",
-      "sha256": "37aaa19f906dd8507a8c99c34d08fe09e67f49ff9e9c6e97928f962c62b5d732"
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.18/index.html",
+      "sha256": "bc5a01eb4a50b65ddd0353ae28ebd1a4eaec9f3bc012da52fca43d50f403f244"
     }
   }
 }

@@ -485,7 +485,10 @@ function whoTags(r) {
 const lenHtml = r => r && r.video_len
   ? '<span class="vlen" title="Video length from ProPresenter. Planning Center: ' + (r.length ? mmss(r.length) : 'none') + '">▶ ' + mmss(r.video_len) + '</span>'
   : (r && r.length ? mmss(r.length) : '');
-const nmText = r => r.video_len ? '<span class="vlen">▶ ' + mmss(r.video_len) + '</span> video' : mmss(r.length) + ' planned';
+// "Message at 11:36 · after Church News, At the Movies Promo, Bumper Video" (what's next first: phones cut the end off)
+const chainText = c => (c.next ? splitTitle(c.next).name + ' at ' + c.ends.replace(/\s?[AP]M$/i, '') : 'Videos end ' + c.ends) +
+  ' · after ' + c.names.map(n => splitTitle(n).name).join(', ');
+const nmText = r =>r.video_len ? '<span class="vlen">▶ ' + mmss(r.video_len) + '</span> video' : mmss(r.length) + ' planned';
 const itemLabel = r =>esc(splitTitle(r && r.title).name) + whoTags(r);       // "Message: P. Jay Miller" -> "Message · P. Jay Miller"
 let lastCur = null, lastState = null, setupShown = false, lastUpdate = null;
 // ---- display settings: per device (saved in this browser), so each phone, iPad and TV can differ.
@@ -515,8 +518,9 @@ function timerSlot(s, slot, label, val, sub) {
   const mode = prefs.timer || 'auto', vid = s.video, mt = s.message_timer;
   let show = true;
   if (vid && mode !== 'clock' && mode !== 'off') {
-    $(label).textContent = 'Video left'; $(val).textContent = mmss(vid.left); $(val).className = 'v vid';
-    $(sub).textContent = (vid.name ? vid.name + ' · ' : '') + 'ends ' + vid.ends;
+    const ch = vid.chain;                      // back-to-back videos count down as one
+    $(label).textContent = ch ? 'Videos left' : 'Video left'; $(val).textContent = mmss(ch ? ch.left : vid.left); $(val).className = 'v vid';
+    $(sub).textContent = ch ? chainText(ch) : (vid.name ? vid.name + ' · ' : '') + 'ends ' + vid.ends;
   } else if (mode === 'auto') {
     $(label).textContent = s.message_timer_label || 'Message timer';
     $(val).textContent = mt ? (shortTimer(mt.time) || '—') : '—';
@@ -668,7 +672,9 @@ function nowPanel(s, r) {
     h += '<div class="big">' + mmss(v.left) + ' <small>left of ' + mmss(v.total) + '</small></div>';
     if (v.name) h += '<div class="line">' + esc(v.name) + '</div>';
     h += timeline(v.pct, [], -1, false);
-    h += '<div class="r2"><span>Ends <b>' + esc(v.ends) + '</b></span></div>';
+    h += '<div class="r2"><span>Ends <b>' + esc(v.ends) + '</b></span>' +
+         (v.chain ? '<span>Videos left <b class="vlen">' + mmss(v.chain.left) + '</b></span>' : '') + '</div>';
+    if (v.chain) h += '<div class="line">' + esc(chainText(v.chain)) + '</div>';
   } else {
     const el = s.current_item_el_s, len = s.current_item_len_s;
     h += '<div class="big">' + (el != null ? mmss(el) : '—') + (len ? ' <small>of ' + mmss(len) + '</small>' : '') + '</div>';
@@ -793,7 +799,9 @@ function renderTV(s) {
       h += '<div class="huge">' + mmss(v.left) + ' <small>left</small></div>';
       if (v.name) h += '<div class="line">' + esc(v.name) + '</div>';
       h += timeline(v.pct, [], -1, false);
-      h += '<div class="stats"><span>Ends <b>' + esc(v.ends) + '</b></span><span><b>' + mmss(v.total) + '</b> long</span></div>';
+      h += '<div class="stats"><span>Ends <b>' + esc(v.ends) + '</b></span><span><b>' + mmss(v.total) + '</b> long</span>' +
+           (v.chain ? '<span>Videos left <b>' + mmss(v.chain.left) + '</b></span>' : '') + '</div>';
+      if (v.chain) h += '<div class="line">' + esc(chainText(v.chain)) + '</div>';
     } else {
       const el = s.current_item_el_s, len = s.current_item_len_s;
       h += '<div class="huge">' + (el != null ? mmss(el) : '—') + (len ? ' <small>of ' + mmss(len) + '</small>' : '') + '</div>';
