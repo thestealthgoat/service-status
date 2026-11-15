@@ -42,7 +42,7 @@
 
   /* main layout: running order + right column */
   .layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 40px; padding: 4px 32px 20px; }
-  .order { overflow-y: auto; min-height: 0; padding-right: 6px; scrollbar-width: thin; }
+  .order { overflow-y: auto; overflow-x: hidden; min-height: 0; padding-right: 6px; scrollbar-width: thin; }
   ol { list-style: none; }
   li.row { display: grid; grid-template-columns: 64px 1fr 60px; align-items: baseline; gap: 6px; padding: 9px 0; font-size: 19px; border-bottom: 1px solid var(--line); }
   li.row .t { color: var(--mute); font-size: 17px; }
@@ -125,6 +125,8 @@
   body.m .seg button { flex: 1; background: none; border: 0; color: var(--mute); font: inherit; font-size: 14px; padding: 7px 0; border-radius: 7px; cursor: pointer; }
   body.m .seg button.on { background: #273140; color: var(--text); font-weight: 600; }
   body.m li.now { margin: 6px 0 0; padding: 16px 16px 18px; }
+  .now .r1 h2 { min-width: 0; overflow-wrap: anywhere; }
+  body.m .now .r1 { flex-wrap: wrap; row-gap: 2px; }   /* "started 11:33 AM · matched by order" drops under the title when it doesn't fit */
   body.m .now h2 { font-size: 20px; }body.m .now .big { font-size: 40px; }body.m .now .big small { font-size: 20px; }
   body.m .foot { padding: 0 16px 10px; flex-wrap: wrap; }
   
@@ -326,6 +328,16 @@
   body.m .gear { font-size: 0; padding: 0; width: 44px; } body.m .gear::before { content: "\2699"; font-size: 20px; }   /* L1 */
   body.m .top { gap: 8px; }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } } /* M3 */
+  /* furthest point wins: "Holding at Close Worship · ProPresenter is on What a God · Unlock" */
+  .holdline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 8px; font-size: 14px; color: var(--acc); }
+  .holdline b { color: var(--text); font-weight: 600; }
+  .unlockbtn { min-height: 44px; padding: 0 16px; border-radius: 99px; border: 1px solid var(--acc); background: none; color: var(--acc);
+    font: inherit; font-weight: 600; cursor: pointer; }
+  .unlockbtn.armed { background: var(--acc); color: #10141a; }
+  .tvnow .holdline { font-size: 1.6vw; margin-top: .6vw; }
+  /* video items: real length from ProPresenter */
+  .vlen { color: var(--acc); white-space: nowrap; }
+  li.row.done .vlen, li.mini.done .vlen { color: var(--done); }
   /* Plan picked by hand in Settings (until midnight): a Manual tag on every screen */
   .manualtag { background: none; border: 1px solid var(--acc); color: var(--acc); flex: none; white-space: nowrap; }
   .tvmanual { font-size: 1.4vw; border: .1vw solid var(--acc); color: var(--acc); border-radius: 99px; padding: .2vw .8vw; align-self: center; }
@@ -469,7 +481,12 @@ function whoTags(r) {
   const w = splitTitle(r && r.title).who, d = ((r && r.desc) || '').replace(/\s+/g, ' ').trim();
   return (w ? '<span class="who">' + esc(w) + '</span>' : '') + (d && d !== w ? '<span class="who' + (w ? ' note' : '') + '">' + esc(d) + '</span>' : '');
 }
-const itemLabel = r => esc(splitTitle(r && r.title).name) + whoTags(r);       // "Message: P. Jay Miller" -> "Message · P. Jay Miller"
+// an item's length: the real video length from ProPresenter (▶) for video items, else the Planning Center length
+const lenHtml = r => r && r.video_len
+  ? '<span class="vlen" title="Video length from ProPresenter. Planning Center: ' + (r.length ? mmss(r.length) : 'none') + '">▶ ' + mmss(r.video_len) + '</span>'
+  : (r && r.length ? mmss(r.length) : '');
+const nmText = r => r.video_len ? '<span class="vlen">▶ ' + mmss(r.video_len) + '</span> video' : mmss(r.length) + ' planned';
+const itemLabel = r =>esc(splitTitle(r && r.title).name) + whoTags(r);       // "Message: P. Jay Miller" -> "Message · P. Jay Miller"
 let lastCur = null, lastState = null, setupShown = false, lastUpdate = null;
 // ---- display settings: per device (saved in this browser), so each phone, iPad and TV can differ.
 // The TV has no buttons, so it also reads them from its address: /tv?headers=1&size=l&people=0
@@ -582,15 +599,15 @@ function nowNext(s, rows, cur) {
   const n = up[0];
   if (n) h += '<li class="next"><div class="k2">Next' + (prefs.headers && n._sec && n._sec !== (rows[cur] && rows[cur]._sec) ? ' · <span style="color:var(--acc)">' + esc(n._sec) + '</span>' : '') + (n.proj || n.planned ? ' at <span class="' + tcls(n) + '">' + esc(n.proj || n.planned) + '</span>' : '') + '</div>' +
               '<div class="nt">' + itemLabel(n) + '</div>' +
-              (n.length ? '<div class="nm">' + mmss(n.length) + ' planned</div>' : '') + '</li>';
-  up.slice(1, 3).forEach(r => { h += '<li class="then"><span class="t ' + tcls(r) + '">' + esc(r.proj || r.planned || '') + '</span><span>' + itemLabel(r) + '</span><span class="l">' + (r.length ? mmss(r.length) : '') + '</span></li>'; });
+              (n.video_len || n.length ? '<div class="nm">' + nmText(n) + '</div>' : '') + '</li>';
+  up.slice(1, 3).forEach(r => { h += '<li class="then"><span class="t ' + tcls(r) + '">' + esc(r.proj || r.planned || '') + '</span><span>' + itemLabel(r) + '</span><span class="l">' + lenHtml(r) + '</span></li>'; });
   return h;
 }
 // phone: the whole order on one screen, one line each
 function miniOrder(rows, cur) {
   return rows.map((r, i) => hdr(r, rows[i - 1]) + '<li class="mini' + (i === cur ? ' cur' : (cur >= 0 && i < cur ? ' done' : '')) + '"><span class="t ' + tcls(r) + '">' +
     esc(r.actual || r.proj || r.planned || '') + '</span><span>' + itemLabel(r) +
-    '</span><span class="l">' + (r.length ? mmss(r.length) : '') + '</span></li>').join('');
+    '</span><span class="l">' + lenHtml(r) + '</span></li>').join('');
 }
 
 function timeline(pct, marks, onIdx, over) {
@@ -602,11 +619,31 @@ function timeline(pct, marks, onIdx, over) {
   return h + '</div>';
 }
 
+// Furthest point wins: when ProPresenter goes back (a slide, or song 3 during Close Worship), say what's held and offer
+// Unlock (snap to what's live). Unlock takes a second tap within 4 s so nobody does it by accident.
+let unlockArm = 0;
+function holdLine(s, noButton) {
+  const hd = s.hold, mh = s.message && s.message.held;
+  if (!hd && !mh) return '';
+  const txt = hd ? 'Holding at <b>' + esc(splitTitle(hd.item).name) + '</b> · ProPresenter is on ' + esc(splitTitle(hd.live).name)
+                 : 'Holding at slide <b>' + mh.at + '</b> · live is slide ' + mh.live;
+  const armed = Date.now() < unlockArm;
+  return '<div class="holdline">' + '<span>' + txt + '</span>' + (noButton ? '' : '<button type="button" class="unlockbtn' + (armed ? ' armed' : '') +
+    '" onclick="unlockTap()">' + (armed ? 'Tap again to unlock' : 'Unlock') + '</button>') + '</div>';
+}
+async function unlockTap() {
+  if (Date.now() < unlockArm) {
+    unlockArm = 0;
+    try { await fetch('/api/unlock', { method: 'POST' }); } catch (e) {}
+  } else { unlockArm = Date.now() + 4000; setTimeout(() => { if (lastState) render(lastState); }, 4100); }
+  if (lastState) render(lastState);
+}
 function nowPanel(s, r) {
   const m = s.message, d = s.deck;
   const title = r ? r.title : (m ? m.name : (s.current_item || ''));
   const who = r && r.desc ? '<span class="who">' + esc(r.desc) + '</span>' : '';
   let h = '<div class="r1"><h2>' + esc(pretty(title)) + who + '</h2><span class="started">' + (s.current_item_started ? 'started ' + esc(s.current_item_started) : '') + (s.match === 'guess' ? ' · matched by order' : '') + '</span></div>';
+  h += holdLine(s);
   if (m) {
     const marks = m.points.map(p => ({ at: p.at, label: p.label.replace(/^Point\s*/i, '') }));
     let on = -1; marks.forEach((p, i) => { if (m.pct >= p.at - 0.01) on = i; });
@@ -691,7 +728,7 @@ function render(s) {
     const tc = r.actual ? '' : (r.proj_late == null ? '' : (r.proj_late >= 120 ? 'late' : (r.proj_late <= -120 ? 'early' : '')));
     html += '<li class="row' + (done ? ' done' : '') + '"><span class="t ' + tc + '"' + (r.planned ? ' title="Planned ' + esc(r.planned) + '"' : '') + '>' + esc(tm) +
             '</span><span>' + itemLabel(r) +
-            '</span><span class="l">' + (r.length ? mmss(r.length) : '') + '</span></li>';
+            '</span><span class="l">' + lenHtml(r) + '</span></li>';
   });
   if (curIdx < 0 && (s.message || s.deck || s.video)) html = '<li class="now">' + nowPanel(s, null) + '</li>' + html;
   if (phone.matches && rows.length) html = (view === 'all' && !document.body.classList.contains('ipad')) ? miniOrder(rows, curIdx) : nowNext(s, rows, curIdx);
@@ -735,6 +772,7 @@ function renderTV(s) {
     const title = r ? r.title : (m ? m.name : (s.current_item || ''));
     h += '<div class="lbl">Now' + (prefs.headers && r && r._sec ? ' · <span class="sec">' + esc(r._sec) + '</span>' : '') + (s.current_item_started ? ' · started ' + esc(s.current_item_started) : '') + '</div>';
     h += '<h1>' + esc(pretty(title)) + (r && r.desc ? '<span class="who">' + esc(r.desc) + '</span>' : '') + '</h1>';
+    h += holdLine(s, true);     // the TV has no buttons: just say what's held
     if (m) {
       const marks = m.points.map(p => ({ at: p.at, label: p.label.replace(/^Point\s*/i, '') }));
       let on = -1; marks.forEach((p, i) => { if (m.pct >= p.at - 0.01) on = i; });
@@ -770,7 +808,7 @@ function renderTV(s) {
     const x = up[0], who = x.desc || (/:/.test(x.title) ? x.title.replace(/^[^:]*:\s*/, '') : '');
     n += '<div class="k">Next' + (prefs.headers && x._sec && x._sec !== (r && r._sec) ? ' · <span class="sec">' + esc(x._sec) + '</span>' : '') + (x.proj || x.planned ? ' at <span class="' + tcls(x) + '">' + esc(x.proj || x.planned) + '</span>' : '') + '</div>' +
          '<div class="nt">' + itemLabel(x) + '</div>' +
-         (x.length ? '<div class="nm">' + mmss(x.length) + ' planned</div>' : '');
+         (x.video_len || x.length ? '<div class="nm">' + nmText(x) + '</div>' : '');
     up.slice(1, 3).forEach(y => { n += '<div class="then"><span class="' + tcls(y) + '">' + esc(y.proj || y.planned || '') + '</span><span>' + itemLabel(y) + '</span></div>'; });
   }
   $('tvnext').innerHTML = n;

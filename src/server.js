@@ -269,7 +269,7 @@ class PCO {
 }
 
 // ------------------------------------------------------------------ state
-const TRACK = { msgPct: {}, msgUuid: null, msgStarted: null, msgStarts: {}, svcKey: null, cur: null, curStart: null, pend: null, pendSince: null, lastSeen: null, done: false };
+const TRACK = { msgPct: {}, msgFar: {}, unlock: false, msgUuid: null, msgStarted: null, msgStarts: {}, svcKey: null, cur: null, curStart: null, pend: null, pendSince: null, lastSeen: null, done: false };
 
 // Remembers when each Planning Center item actually started/ended, so "vs plan" keeps counting while an
 // item runs long, and projections use real lengths (earlier service today, else the median of past Sundays).
@@ -291,6 +291,11 @@ class RunStore {
     r.end = ts; this.dirty = true;
     const secs = (r.end - r.start) / 1000, k = avgKeyOf(row);
     if (!demo && !runs.rehearsal && k && !r.learned && secs >= 5 && secs <= 3 * (row.length || 600) + 600) { r.learned = 1; this.addAvg(k, secs); }
+  }
+  discard(runs, key, row) {   // forget a run that wasn't real (test clicks, the wrong item), including what it taught
+    const r = runs.rows[key]; if (!r) return;
+    if (r.learned && r.start && r.end) { const k = avgKeyOf(row), a = k && this.data.avg[k], s = Math.round((r.end - r.start) / 1000), i = a ? a.lastIndexOf(s) : -1; if (i >= 0) a.splice(i, 1); }
+    delete runs.rows[key]; this.dirty = true;
   }
   addAvg(k, secs) { const a = (this.data.avg[k] ||= []); a.push(Math.round(secs)); while (a.length > 8) a.shift(); this.dirty = true; }
   // videos seen looping (pre-service loops, motion backgrounds), by ProPresenter media id: remembered across Sundays
@@ -429,6 +434,135 @@ function videoCounts(video, expectedSecs) {
   return !(expectedSecs > 0 && video.total < 0.5 * expectedSecs);
 }
 
+// ---- furthest point wins. Going back (a scripture he re-shows, song 3 again in Close Worship) doesn't move us back.
+// Message slides: a normal flip forward (up to 3 slides) counts at once; a bigger jump only after 5 s on that slide,
+// so clicking ahead by mistake and straight back changes nothing. f = { far, slide, since } is kept per message.
+function advanceFar(f, cur, now) {
+  if (cur === null || cur === undefined) return f;
+  if (cur !== f.slide) { f.slide = cur; f.since = now; }
+  if (f.far === null) f.far = cur;
+  else if (cur > f.far && (cur - f.far <= 3 || now - f.since >= 5000)) f.far = cur;
+  return f;
+}
+// Order: going back to an earlier item is a correction only if the later one was current for under a minute
+// (or Unlock was pressed); otherwise the later item stays current and the earlier one is shown as "back in".
+const backMoveAllowed = (curStart, now, unlock) => !!unlock || now - curStart < 60000;
+// Is this the item's own video (show its length)? At least a quarter of the planned length: Church News 1:37 in a
+// 4:00 slot is; a 12 s name video, a pre-service loop in a 20 min block or a song's motion background is not.
+const videoIsItem = (secs, plannedSecs) => !(plannedSecs > 0 && secs < 0.25 * plannedSecs);
+
+// ---- message %: a fixed weight per kind of slide instead of every slide counting the same (no learning).
+// He talks longer on a point than while reading through a passage. Kinds come from the slide labels and groups
+// (Point 1, Big Idea, Statement, Quote, a scripture reference), else from the text. Unlabeled decks = equal weights.
+const SLIDE_W = { point: 2, emphasis: 1.5, scripture: 1, more: 0.75, other: 1 };
+const REF = /^(?:[1-3]\s?)?[A-Z][A-Za-z]+\.?\s+\d+:\d+/;     // "Ruth 1:1-2", "1 John 4:8", "Psalm 34:18"
+function slideKinds(slides) {
+  const out = []; let prevKey = null;
+  for (const s of slides) {
+    const label = (s.label || '').trim(), group = (s.group || '').trim(), text = (s.text || '').trim(), first = text.split(/[\r\n]/)[0].trim();
+    let k = 'other', key = null;
+    if (/^Point\s*\d+/i.test(label) || /^Point\s*\d+/i.test(group) || /^\d+\.\s/.test(text)) k = 'point';
+    else if (/^(big idea|statement|quote)\b/i.test(label)) k = 'emphasis';
+    else if (REF.test(label) || REF.test(first) || /^\d+[A-Za-z“"‘'(]/.test(text)) {
+      key = group || (REF.test(first) ? first : '');                 // the passage this slide belongs to
+      k = prevKey !== null && key === prevKey ? 'more' : 'scripture';
+    }
+    out.push(k); prevKey = key;
+  }
+  return out;
+}
+const slideWeights = slides => slideKinds(slides).map(k => SLIDE_W[k]);
+function weightedPos(w) {             // % at the start of each slide: first slide 0, last slide 100
+  if (w.length <= 1) return w.map(() => 0);
+  const total = w.slice(0, -1).reduce((a, b) => a + b, 0) || 1;
+  let acc = 0; return w.map(x => { const p = 100 * acc / total; acc += x; return p; });
+}
+
+// ---- real video lengths for video items (Church News, a bumper...) before they play.
+// ProPresenter's API only gives a video's length while it plays, so read it from this Mac: which video file each
+// presentation plays (its .pro file, or the cloud workspace's media index), then the file's own movie header.
+// Read-only. When ProPresenter is on another computer, or none of this is found, nothing changes.
+function mp4Duration(file) {          // seconds, from the MP4/MOV movie header ('moov' -> 'mvhd'); null if not readable
+  let fd; try { fd = fs.openSync(file, 'r'); } catch { return null; }
+  try {
+    const size = fs.fstatSync(fd).size, h = Buffer.alloc(16);
+    for (let pos = 0; pos + 8 <= size;) {
+      fs.readSync(fd, h, 0, 16, pos);
+      let len = h.readUInt32BE(0), hdr = 8; const type = h.toString('latin1', 4, 8);
+      if (len === 1) { len = Number(h.readBigUInt64BE(8)); hdr = 16; } else if (len === 0) len = size - pos;
+      if (len < hdr) return null;
+      if (type === 'moov') {
+        const body = Buffer.alloc(Math.min(len - hdr, 64 * 1024 * 1024)); fs.readSync(fd, body, 0, body.length, pos + hdr);
+        for (let p = 0; p + 8 <= body.length;) {
+          const l = body.readUInt32BE(p);
+          if (body.toString('latin1', p + 4, p + 8) === 'mvhd' && p + 9 <= body.length && p + 8 + (body.readUInt8(p + 8) ? 32 : 20) <= body.length) {
+            const v = body.readUInt8(p + 8), ts = body.readUInt32BE(p + 8 + (v ? 20 : 12));
+            const du = v ? Number(body.readBigUInt64BE(p + 8 + 24)) : body.readUInt32BE(p + 8 + 16);
+            return ts ? du / ts : null;
+          }
+          if (l < 8) return null; p += l;
+        }
+        return null;
+      }
+      pos += len;
+    }
+    return null;
+  } catch { return null; } finally { fs.closeSync(fd); }
+}
+const VIDEO_EXT = /\.(mp4|mov|m4v|mxf)$/i;
+function videoFilesFromIndex(index, docUuid, root) {   // ProPresenter cloud workspace: DocumentStore/media-projection-cache-v1.json
+  const d = index && index.documents && index.documents[String(docUuid).toLowerCase()];
+  const out = [];
+  for (const r of (d && d.projection && d.projection.references) || []) {
+    if (r.media_type !== 'Video') continue;
+    const u = r.source && r.source.File && r.source.File.local_url, p = u && u.relative_file_path && u.relative_file_path.Local && u.relative_file_path.Local.path;
+    if (p && VIDEO_EXT.test(p)) { const f = p.startsWith('/') ? p : path.join(root, p); if (!out.includes(f)) out.push(f); }
+  }
+  return out;
+}
+function videoFilesFromPro(buf) {     // classic .pro file: its media links are file:// URLs
+  const out = [];
+  for (const m of buf.toString('latin1').matchAll(/file:\/\/[^\x00-\x20"]+?\.(?:mp4|mov|m4v|mxf)(?![A-Za-z0-9])/gi)) {
+    let f; try { f = decodeURIComponent(Buffer.from(m[0].slice(7), 'latin1').toString('utf8')); } catch { continue; }
+    if (!out.includes(f)) out.push(f);
+  }
+  return out;
+}
+class VideoLengths {
+  constructor() { this.byDoc = new Map(); this.paths = new Map(); this.dur = new Map(); this.idx = {}; this.key = ''; this.at = 0; this.busy = false; }
+  refresh(pp, items) {                // never holds up the screen: looks things up in the background
+    const docs = (items || []).map(it => it.presentation_info && it.presentation_info.presentation_uuid).filter(Boolean);
+    const key = docs.join('|');
+    if (this.busy || (key === this.key && Date.now() - this.at < 60000)) return;
+    this.busy = true;
+    this.load(pp, docs).then(m => { this.byDoc = m; }).catch(() => {}).finally(() => { this.key = key; this.at = Date.now(); this.busy = false; });
+  }
+  async load(pp, docs) {
+    const out = new Map();
+    for (const uuid of docs) {
+      let p = this.paths.get(uuid);
+      if (p === undefined) { try { const d = await pp.get('/v1/presentation/' + encodeURIComponent(uuid)); p = (d && d.presentation && d.presentation.presentation_path) || null; } catch { p = null; } this.paths.set(uuid, p); }
+      if (!p) continue;
+      let files = [];
+      if (fs.existsSync(p)) { try { files = videoFilesFromPro(fs.readFileSync(p)); } catch { /* unreadable */ } }
+      else { const i = p.indexOf('/Libraries/'); if (i > 0) files = videoFilesFromIndex(this.index(p.slice(0, i)), uuid, p.slice(0, i)); }
+      let best = null;
+      for (const f of files) { const s = this.duration(f); if (s && (!best || s > best.secs)) best = { secs: Math.round(s), file: path.basename(f) }; }
+      if (best) out.set(uuid, best);
+    }
+    return out;
+  }
+  index(root) {                       // re-read only when ProPresenter rewrites it
+    const f = path.join(root, 'DocumentStore', 'media-projection-cache-v1.json');
+    try { const m = fs.statSync(f).mtimeMs; if (this.idx.file !== f || this.idx.mtime !== m) this.idx = { file: f, mtime: m, data: JSON.parse(fs.readFileSync(f, 'utf8')) }; return this.idx.data; }
+    catch { return null; }
+  }
+  duration(f) {
+    try { const st = fs.statSync(f), k = f + '#' + st.mtimeMs + '#' + st.size; if (!this.dur.has(k)) this.dur.set(k, mp4Duration(f)); return this.dur.get(k); }
+    catch { return null; }
+  }
+}
+
 function buildState(cfg, pp, pco, store) {
   const now = Date.now();
   const state = { now: clockSec(new Date()), pp: { ok: !!pp.ok, error: pp.error || null },
@@ -467,12 +601,18 @@ function buildState(cfg, pp, pco, store) {
     let points = slides.map((s, i) => [i, s.label]).filter(([, l]) => /^Point\s*\d+/i.test(l));
     if (!points.length) { let prevG = null; points = slides.map((s, i) => { const g = s.group; const hit = g !== prevG && /^Point\s*\d+/i.test(g || ''); prevG = g; return hit ? [i, g] : null; }).filter(Boolean); }
     if (!points.length) points = slides.map((s, i) => { const m = s.text.match(/^(\d+)\.\s/); return m ? [i, 'Point ' + m[1]] : null; }).filter(Boolean);
+    // furthest point wins: progress, point and projection follow the furthest slide reached, not a slide he went back to
+    const far = (TRACK.msgFar[mk] ||= { far: null, slide: null, since: now });
+    if (TRACK.unlock && cur !== null) { far.far = cur; far.slide = cur; far.since = now; }
+    advanceFar(far, cur, now);
+    const at = cur === null ? null : (far.far ?? cur);
     let pointNow = null;
-    for (const [i, l] of points) if (cur !== null && i <= cur) pointNow = l;
+    for (const [i, l] of points) if (at !== null && i <= at) pointNow = l;
     const labOf = i => { const s = slides[i]; return !s ? '' : (s.label || s.group || s.text.split('\n')[0].slice(0, 60)); };
-    const last = Math.max(1, slides.length - 1);
-    msg = { name: pid.name, index: cur, count: slides.length, pct: cur === null ? 0 : 100 * cur / last,
-      points: points.map(([i, l]) => ({ at: 100 * i / last, label: l })), point_now: pointNow, point_count: points.length,
+    const pos = weightedPos(slideWeights(slides));       // % through, weighted by kind of slide (points count more)
+    msg = { name: pid.name, index: at, live_index: cur, held: cur !== null && at > cur ? { at: at + 1, live: cur + 1 } : null,
+      count: slides.length, pct: at === null ? 0 : (pos[at] ?? 100),
+      points: points.map(([i, l]) => ({ at: pos[i] ?? 100, label: l })), point_now: pointNow, point_count: points.length,
       current_label: labOf(cur), current_text: cur !== null && slides[cur] ? slides[cur].text : '',
       next_label: labOf((cur || 0) + 1), elapsed: TRACK.msgStarted ? fmtSecs((now - TRACK.msgStarted) / 1000) : null };
   }
@@ -539,6 +679,15 @@ function buildState(cfg, pp, pco, store) {
     }
     if (t !== null) { state.service_end_planned = clock(new Date(t)); state.service_end_planned_ts = t; }
   }
+  // video items: the real length of the video their ProPresenter presentation plays (read before the service; see VideoLengths)
+  const vl = pp.video_lengths;
+  if (vl && vl.size && rows.length) {
+    const ppAll = (pp.playlist?.items || []).filter(it => it.type !== 'header'), al = alignOrder(ppAll, rows);
+    for (const it of ppAll) {
+      const v = vl.get(it.presentation_info?.presentation_uuid), m = v && al.get(it.id?.uuid);
+      if (m && !m.guess && videoIsItem(v.secs, rows[m.row].length)) rows[m.row].video_len = v.secs;
+    }
+  }
 
   // ---- which Planning Center item is on now (sticky, forward-biased, debounced)
   const dayKey = isoDay(new Date());
@@ -546,7 +695,7 @@ function buildState(cfg, pp, pco, store) {
   const rehearsal = !!(start && now < start.getTime() - 20 * 60000);
   const svcName = (svc || 'service') + (rehearsal ? ' rehearsal' : '');
   if (TRACK.svcKey !== dayKey + ' ' + svcName)
-    Object.assign(TRACK, { svcKey: dayKey + ' ' + svcName, cur: null, curStart: null, pend: null, pendSince: null, lastSeen: null, done: false });
+    Object.assign(TRACK, { svcKey: dayKey + ' ' + svcName, cur: null, curStart: null, curSince: null, pend: null, pendSince: null, lastSeen: null, done: false });
   const runs = store.svc(dayKey, svcName);
   runs.rehearsal = rehearsal;
   const keys = rows.map((r, i) => rowKeyOf(rows, i));
@@ -577,16 +726,30 @@ function buildState(cfg, pp, pco, store) {
     if (isMsgRow(nx)) seen = nx;
   }
 
+  state.hold = null;
   if (seen !== null && seen !== TRACK.cur) {
-    if (TRACK.pend !== seen) { TRACK.pend = seen; TRACK.pendSince = now; }
-    const hold = (TRACK.cur === null || isMsgRow(seen)) ? 0 : 4000;   // ignore quick clicks through the playlist
-    if (now - TRACK.pendSince >= hold) {
-      if (TRACK.cur !== null) store.finish(runs, keys[TRACK.cur], TRACK.pendSince, rows[TRACK.cur], cfg.demo);
-      const rec = runs.rows[keys[seen]];
-      TRACK.cur = seen; TRACK.curStart = rec && rec.start && !rec.end ? rec.start : TRACK.pendSince;
-      store.begin(runs, keys[seen], TRACK.curStart); TRACK.pend = null; TRACK.done = false;
+    const back = TRACK.cur !== null && seen < TRACK.cur;
+    if (back && !backMoveAllowed(TRACK.curSince || TRACK.curStart, now, TRACK.unlock)) {
+      // furthest point wins: song 3 again during Close Worship keeps Close Worship current (its clock keeps running)
+      state.hold = { item: rows[TRACK.cur].title, live: rows[seen].title }; TRACK.pend = null;
+    } else {
+      if (TRACK.pend !== seen) { TRACK.pend = seen; TRACK.pendSince = now; }
+      const hold = (TRACK.cur === null || isMsgRow(seen) || (back && TRACK.unlock)) ? 0 : 4000;   // ignore quick clicks through the playlist
+      if (now - TRACK.pendSince >= hold) {
+        const rec = runs.rows[keys[seen]];
+        if (back) {     // the later item(s) were the wrong item or test clicks: forget them, and pick the earlier item back up
+          for (let j = seen + 1; j < rows.length; j++) if (runs.rows[keys[j]]) store.discard(runs, keys[j], rows[j]);
+          TRACK.curStart = rec && rec.start ? rec.start : TRACK.pendSince;
+        } else {
+          if (TRACK.cur !== null) store.finish(runs, keys[TRACK.cur], TRACK.pendSince, rows[TRACK.cur], cfg.demo);
+          TRACK.curStart = rec && rec.start && !rec.end ? rec.start : TRACK.pendSince;
+        }
+        TRACK.cur = seen; TRACK.curSince = TRACK.pendSince;
+        store.begin(runs, keys[seen], TRACK.curStart); TRACK.pend = null; TRACK.done = false;
+      }
     }
   } else if (seen !== null) TRACK.pend = null;
+  TRACK.unlock = false;              // an Unlock press applies to this poll only
   if (seen !== null && seen === TRACK.cur) TRACK.lastSeen = now;
 
   // last item of the service and ProPresenter has moved off it for 30 s -> service is over, freeze
@@ -604,6 +767,7 @@ function buildState(cfg, pp, pco, store) {
   const expected = i => {
     const r = rows[i]; if (r.type === 'header') return 0;
     for (const o of otherSvcs) { const x = o[keys[i]]; if (x && x.start && x.end) return (x.end - x.start) / 1000; }
+    if (r.video_len) return r.video_len;              // this week's video, not last weeks' average
     const k = avgKeyOf(r); const m = k ? store.median(k) : null;
     return m != null ? m : (r.length || 0);
   };
@@ -613,11 +777,12 @@ function buildState(cfg, pp, pco, store) {
     const r = rows[curRow], A = TRACK.curStart, endT = TRACK.done ? TRACK.lastSeen : now, el = (endT - A) / 1000;
     if (r.planned_ts) drift = (A - r.planned_ts) / 1000 + Math.max(0, el - (r.length || 0));   // late start + running long
     state.current_item = r.title; state.current_item_desc = r.desc || ''; state.current_item_type = r.type || '';
-    state.current_item_length = fmtSecs(r.length || 0);
-    state.current_item_elapsed = fmtSecs(el);
-    state.current_item_el_s = Math.round(el); state.current_item_len_s = r.length || 0;
-    state.current_item_started = clock(new Date(A));
     if (state.video && !videoCounts(state.video, expected(curRow))) state.video = null;   // a background, not this item's video
+    if (state.video) r.video_len = state.video.total;    // playing now: ProPresenter's own length for it wins
+    state.current_item_length = fmtSecs(r.video_len || r.length || 0);
+    state.current_item_elapsed = fmtSecs(el);
+    state.current_item_el_s = Math.round(el); state.current_item_len_s = r.video_len || r.length || 0;
+    state.current_item_started = clock(new Date(A));
     // projected times for what's left
     let t = TRACK.done ? TRACK.lastSeen : A + Math.max(expected(curRow), el) * 1000;
     if (!TRACK.done && isMsgRow(curRow) && msg?.projected_ts) t = Math.max(now, msg.projected_ts);
@@ -707,6 +872,7 @@ class StatusService {
   constructor(configPath, htmlPath) {
     this.configPath = configPath; this.htmlPath = htmlPath;
     this.cfg = this.loadConfig(); this.state = {}; this.timer = null; this.server = null;
+    this.videos = new VideoLengths();
     this.rebuildClients();
   }
   loadConfig() {
@@ -737,7 +903,10 @@ class StatusService {
     try {
       let ppSnap, pcoPlan;
       if (this.cfg.demo) { ppSnap = demoPP(); pcoPlan = demoPCO(); }
-      else { ppSnap = await this.pp.snapshot(); pcoPlan = this.pco.pickNow(ppSnap); }
+      else {
+        ppSnap = await this.pp.snapshot(); pcoPlan = this.pco.pickNow(ppSnap);
+        if (ppSnap.ok) { this.videos.refresh(this.pp, ppSnap.playlist && ppSnap.playlist.items); ppSnap.video_lengths = this.videos.byDoc; }
+      }
       this.state = buildState(this.cfg, ppSnap, pcoPlan, this.runsFor());
       this.runsFor().save();
     } catch (e) { this.state = { fatal: String(e), now: clockSec(new Date()) }; }
@@ -803,6 +972,10 @@ class StatusService {
       })();
       return;
     }
+    if (req.url.startsWith('/api/unlock') && req.method === 'POST') {   // Unlock (any screen, after a confirm tap): snap to what's live
+      TRACK.unlock = true;
+      return send(200, 'application/json', '{"ok":true}');
+    }
     if (req.url.startsWith('/api/plans') || req.url.startsWith('/api/plan_times')) {   // Settings → Pick one (booth computer only)
       if (!local) return send(403, 'application/json', '{}');
       const q = new URL(req.url, 'http://local').searchParams, times = req.url.startsWith('/api/plan_times');
@@ -849,7 +1022,7 @@ class StatusService {
   stop() { clearTimeout(this.timer); this.server?.close(); }
 }
 
-module.exports = { StatusService, DEFAULTS, buildState, RunStore, TRACK, PCO, simName, alignOrder, manualActive, manualTimes, videoState, videoCounts };
+module.exports = { StatusService, DEFAULTS, buildState, RunStore, TRACK, PCO, simName, alignOrder, manualActive, manualTimes, videoState, videoCounts, advanceFar, backMoveAllowed, videoIsItem, slideKinds, slideWeights, weightedPos, mp4Duration, videoFilesFromIndex, videoFilesFromPro, VideoLengths };
 
 if (require.main === module) {   // node server.js [--demo]
   const svc = new StatusService(path.join(__dirname, 'dev-config.json'), path.join(__dirname, 'index.html'));

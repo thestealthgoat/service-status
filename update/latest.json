@@ -1,15 +1,15 @@
 {
-  "version": "2.0.16",
+  "version": "2.0.17",
   "min_shell": "2.0.0",
-  "notes": "Looping videos no longer throw off the times: pre-service loops and worship motion backgrounds are recognized (and remembered for next week), so only real video items like the pre-roll or a bumper decide when an item ends.",
+  "notes": "Real video lengths: video items like Church News, At the Movies, the pre-roll and the bumper show the video's real length (\u25b6) from ProPresenter, before the service. Furthest point wins: going back to an earlier slide or song no longer pulls progress backwards, with an Unlock button (tap twice) to snap to what's live. The message % weighs points more than scripture slides. Phones no longer scroll sideways when an item title is long.",
   "files": {
     "server.js": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.16/server.js",
-      "sha256": "673dfe51176bf28cce5bf0df508264ed41d3e3078d55c6311bc24723e69dc96f"
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.17/server.js",
+      "sha256": "90911698ea096b632c84d75e1cc024ac6c48a8ac8dd3cceca1f54febc3348898"
     },
     "index.html": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.16/index.html",
-      "sha256": "d7c35ba0c5b2282b0051d0182fe7feb48b8e2d489caaf6cfa190a5a62d25c21c"
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.17/index.html",
+      "sha256": "37aaa19f906dd8507a8c99c34d08fe09e67f49ff9e9c6e97928f962c62b5d732"
     }
   }
 }
