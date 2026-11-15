@@ -1,15 +1,15 @@
 {
-  "version": "2.0.14",
+  "version": "2.0.15",
   "min_shell": "2.0.0",
-  "notes": "Easier to read and use: finished items are readable and marked with a check, connection status shows \u2713 or ! with short labels on phones, clearer button and field outlines, 44 px buttons and tabs, Esc closes the Display and Settings sheets, no iPhone zoom on the dropdowns, and Reduce Motion is respected.",
+  "notes": "Pick the plan by hand: Settings \u2192 Plan to show \u2192 Pick one lets the booth choose the Planning Center service type, plan and service time. Every screen shows a Manual tag, and it goes back to Automatic at midnight. Also: 'Not started' in the Message corner is easier to read.",
   "files": {
     "server.js": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.14/server.js",
-      "sha256": "e2cefdcf73040908820ef424c3411b62c91271e3bed70ca9624bb89c77105099"
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.15/server.js",
+      "sha256": "85fbdfdcd044f6c98e6d35cdb8169e597a699995dc1af5c3ae9c8fcdee121103"
     },
     "index.html": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.14/index.html",
-      "sha256": "a9fea58a2bdd0e0a9e848965579502689456842a4c16b1b5ab2d2bb0ff898c5e"
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.15/index.html",
+      "sha256": "d7c35ba0c5b2282b0051d0182fe7feb48b8e2d489caaf6cfa190a5a62d25c21c"
     }
   }
 }

@@ -80,7 +80,7 @@
   .corner { margin-top: auto; text-align: right; padding-top: 24px; }
   .corner .k { margin-top: 0; }
   .mpct { font-size: 110px; font-weight: 250; letter-spacing: -5px; line-height: .95; }
-  .mpct.none { font-size: 22px; letter-spacing: 0; color: var(--dim); font-weight: 400; }
+  .mpct.none { font-size: 22px; letter-spacing: 0; color: var(--mute); font-weight: 400; }
   .clock .sec { font-size: .45em; color: var(--mute); letter-spacing: 0; margin-left: 2px; }
 
   .foot { flex: none; padding: 0 32px 12px; color: var(--dim); font-size: 13px; display: flex; gap: 18px; }
@@ -326,6 +326,12 @@
   body.m .gear { font-size: 0; padding: 0; width: 44px; } body.m .gear::before { content: "\2699"; font-size: 20px; }   /* L1 */
   body.m .top { gap: 8px; }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } } /* M3 */
+  /* Plan picked by hand in Settings (until midnight): a Manual tag on every screen */
+  .manualtag { background: none; border: 1px solid var(--acc); color: var(--acc); flex: none; white-space: nowrap; }
+  .tvmanual { font-size: 1.4vw; border: .1vw solid var(--acc); color: var(--acc); border-radius: 99px; padding: .2vw .8vw; align-self: center; }
+  .sgmanual { color: var(--acc); border: 1px solid var(--acc); border-radius: 99px; padding: 1px 8px; font-size: .8em; }
+  body.m.stagetab #sgmanual { display: none; }
+  .sheet .btn.manualoff { display: block; margin-top: 12px; min-height: 44px; background: none; border-color: var(--acc); color: var(--acc); }
   .foot, .foot span { color: var(--mute); } .foot b { color: var(--text); }                                       /* C1 */
   body.m .dbtn, body.m .gear { color: var(--text); }
   body.m .top .svc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }   /* L1 */
@@ -338,6 +344,7 @@
   <span class="svc" id="svc">Service</span>
   <span class="series" id="series"></span>
   <span class="demo hidden" id="demo">Demo data</span>
+  <span class="demo manualtag hidden" id="manualtag">Manual</span>
   <span class="sp"></span>
   <span class="st" id="pp">ProPresenter</span>
   <span class="st" id="pco">Planning Center</span>
@@ -360,7 +367,7 @@
 <div class="foot"><span id="upd" class="hidden"></span><span id="phone"></span><span id="pconote"></span><span class="err" id="err"></span></div>
 
 <div id="tv">
-  <div class="tvtop"><b id="tvsvc">Service</b><span id="tvseries"></span><span class="sp"></span><span class="tvclock" id="tvclock">--:--</span></div>
+  <div class="tvtop"><b id="tvsvc">Service</b><span id="tvseries"></span><span class="tvmanual hidden" id="tvmanual">Manual</span><span class="sp"></span><span class="tvclock" id="tvclock">--:--</span></div>
   <div class="tvmain">
     <section class="tvnow" id="tvnow"><div class="tvwait">Waiting for ProPresenter…</div></section>
     <div class="tvside">
@@ -377,7 +384,7 @@
     <div id="sgslot"><div class="k" id="sgtl">Timer</div><div class="v" id="sgtv">—</div><div class="sm" id="sgts"></div></div></div>
   <section class="sgbox sgnow"><span class="tag" id="sgcurtag">Now</span><div class="sgtext" id="sgcur"></div></section>
   <section class="sgbox sgnext"><span class="tag" id="sgnexttag">Next</span><div class="sgtext" id="sgnext"></div></section>
-  <div class="sgfoot"><span id="sgitem"></span><span class="sp"></span><span id="sgup"></span></div>
+  <div class="sgfoot"><span class="sgmanual hidden" id="sgmanual">Manual</span><span id="sgitem"></span><span class="sp"></span><span id="sgup"></span></div>
 </div>
 
 <div class="modal hidden" id="dmodal" onclick="if (event.target === this) this.classList.add('hidden')">
@@ -421,8 +428,20 @@
     <input type="text" id="s_app" autocomplete="off" spellcheck="false">
     <label for="s_secret">Secret</label>
     <input type="password" id="s_secret" autocomplete="off" placeholder="">
-    <label for="s_st">Service type</label>
+    <label for="s_st">Service type for Automatic</label>
     <select id="s_st"><option value="">Automatic — whichever has a plan today</option></select>
+    <label for="s_mode">Plan to show</label>
+    <select id="s_mode" onchange="manualUI()"><option value="auto">Automatic — matches ProPresenter, switches service by the clock</option><option value="manual">Pick one…</option></select>
+    <div id="s_manual" class="hidden">
+      <label for="s_mst">Service type</label>
+      <select id="s_mst" onchange="loadPlans()"></select>
+      <label for="s_mplan">Plan</label>
+      <select id="s_mplan" onchange="loadTimes()"></select>
+      <label for="s_mtime">Service time</label>
+      <select id="s_mtime"><option value="">By the clock — switches 15 min before each service</option></select>
+      <p class="help" id="s_mnote">Every screen shows this plan until midnight, then goes back to Automatic.</p>
+    </div>
+    <button type="button" class="btn manualoff hidden" id="s_mauto" onclick="backToAuto()">Back to Automatic</button>
     <button type="button" class="btn link" onclick="clearPco()">Remove Planning Center token</button>
     <h3>Message timer</h3>
     <select id="s_timer"><option value="">Automatic — a timer named Message or Sermon</option></select>
@@ -634,6 +653,9 @@ function render(s) {
   $('pco').className = 'st ' + (s.pco?.enabled && !s.pco?.error ? 'ok' : (s.pco?.enabled ? 'bad' : ''));
   $('pco').textContent = phone.matches ? (s.pco?.enabled ? 'PCO' : 'PCO off') : (s.pco?.enabled ? 'Planning Center' : 'Planning Center off');
   $('demo').classList.toggle('hidden', !s.demo);
+  const man = s.pco && s.pco.manual;
+  $('manualtag').classList.toggle('hidden', !man);
+  $('manualtag').title = man ? 'Picked in Settings: ' + man.label + ' (until midnight)' : '';
   $('gear').classList.toggle('hidden', !s.can_edit);
   $('err').textContent = [s.fatal, s.demo ? '' : s.pp?.error, s.pco?.error].filter(Boolean).join(' · ');
   $('pconote').textContent = s.pco?.note || '';
@@ -694,6 +716,7 @@ function renderTV(s) {
   const cm = (s.now || '').replace(/\s?[AP]M$/i, '').match(/^(\d+:\d\d)/);
   $('tvclock').textContent = cm ? cm[1] : '--:--';
   $('tvsvc').textContent = s.service ? s.service + ' Service' : 'Service';
+  $('tvmanual').classList.toggle('hidden', !(s.pco && s.pco.manual));
   $('tvseries').textContent = s.pco?.note ? (s.playlist || '') : [s.pco?.title || s.pco?.series].filter(Boolean).join('');
   const d = $('tvdrift'); d.textContent = s.drift ?? '—';
   d.className = 'v ' + (s.drift_secs == null ? '' : (s.drift_secs > 60 ? 'late' : 'good'));
@@ -784,6 +807,7 @@ function renderStage(s) {
   const cm = (s.now || '').replace(/\s?[AP]M$/i, '').match(/^(\d+:\d\d)(:\d\d)?/);
   $('sgclock').innerHTML = cm ? cm[1] + '<span class="sec">' + (cm[2] || '') + '</span>' : '--:--';
   timerSlot(s, 'sgslot', 'sgtl', 'sgtv', 'sgts');
+  $('sgmanual').classList.toggle('hidden', !(s.pco && s.pco.manual));
   withSections(s);
   const sl = s.slide || {}, m = s.message, dk = s.deck;
   const rows = (s.rundown || []).filter(r => r.type !== 'header');
@@ -829,9 +853,47 @@ async function tick() {
 }
 tick(); setInterval(tick, 1000);
 
+// ---- Settings → Plan to show: Automatic, or a plan picked by hand (until midnight)
+let manualSaved = null;
+const isoToday = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+function manualUI() {
+  const on = $('s_mode').value === 'manual';
+  $('s_manual').classList.toggle('hidden', !on);
+  $('s_mauto').classList.toggle('hidden', !manualSaved);
+  if (on && !$('s_mplan').length && $('s_mst').value) loadPlans();
+}
+async function loadPlans(keepPlan, keepTime) {
+  const sel = $('s_mplan'), st = $('s_mst').value;
+  sel.length = 0; $('s_mtime').length = 1; if (!st) return;
+  sel.add(new Option('Loading plans…', ''));
+  let o; try { o = await (await fetch('/api/plans?st=' + encodeURIComponent(st))).json(); } catch (e) { o = { error: 'couldn’t reach Service Status' }; }
+  sel.length = 0;
+  if (o.error || !o.plans.length) { sel.add(new Option(o.error ? 'Couldn’t load plans' : 'No plans in the last 2 weeks or next 6', '')); $('s_mnote').textContent = o.error ? 'Planning Center: ' + o.error : ''; return; }
+  const today = isoToday();
+  o.plans.forEach(p => { const x = new Option((p.day === today ? 'Today — ' : '') + p.label, p.id); x.dataset.p = JSON.stringify(p); sel.add(x); });
+  sel.value = keepPlan && o.plans.some(p => p.id === keepPlan) ? keepPlan : (o.plans.find(p => p.day >= today) || o.plans[o.plans.length - 1]).id;
+  await loadTimes(keepTime);
+}
+async function loadTimes(keepTime) {
+  const sel = $('s_mtime'), plan = $('s_mplan').value; sel.length = 1; if (!plan) return;
+  let o; try { o = await (await fetch('/api/plan_times?st=' + encodeURIComponent($('s_mst').value) + '&plan=' + encodeURIComponent(plan))).json(); } catch (e) { o = {}; }
+  (o.times || []).forEach(t => { const x = new Option(t.name + ' — ' + new Date(t.starts_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), t.starts_at); x.dataset.n = t.name; sel.add(x); });
+  sel.value = keepTime && [...sel.options].some(x => x.value === keepTime) ? keepTime : '';
+}
+function manualPayload() {
+  if ($('s_mode').value !== 'manual' || !$('s_mplan').value) return null;
+  const p = JSON.parse($('s_mplan').selectedOptions[0].dataset.p || '{}'), t = $('s_mtime').selectedOptions[0];
+  return { st: $('s_mst').value, st_name: $('s_mst').selectedOptions[0].text, plan_id: p.id, plan_label: p.label, plan_title: p.title,
+    plan_series: p.series, plan_dates: p.dates, time: $('s_mtime').value, time_name: $('s_mtime').value ? (t.dataset.n || '') : '', day: isoToday() };
+}
+async function backToAuto() {
+  await fetch('/api/settings', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ pco_manual: null }) });
+  manualSaved = null; $('s_mode').value = 'auto'; manualUI(); $('s_mode').focus();
+}
 async function openSettings(first) {
   const r = await fetch('/api/settings'); if (!r.ok) return;
   const c = await r.json();
+  manualSaved = c.pco_manual || null; $('s_mode').value = manualSaved ? 'manual' : 'auto'; $('s_mplan').length = 0; manualUI();
   $('s_title').textContent = first ? 'Welcome — set up Service Status' : 'Settings';
   $('s_host').value = c.pp_host; $('s_port').value = c.pp_port; $('s_app').value = c.pco_app_id || '';
   $('s_secret').value = ''; $('s_secret').placeholder = c.pco_secret_set ? 'saved — leave blank to keep' : '';
@@ -844,6 +906,9 @@ async function fillOptions(c) {       // service types from their Planning Cente
     const st = $('s_st'), tm = $('s_timer');
     st.length = 1; (o.service_types || []).forEach(t => st.add(new Option(t.name, t.id)));
     st.value = c.pco_service_type_id ? String(c.pco_service_type_id) : '';
+    const mst = $('s_mst'); mst.length = 0; (o.service_types || []).forEach(t => mst.add(new Option(t.name, t.id)));
+    mst.value = manualSaved ? String(manualSaved.st) : (c.pco_service_type_id ? String(c.pco_service_type_id) : (mst.options[0] || {}).value || '');
+    if (manualSaved) loadPlans(manualSaved.plan_id, manualSaved.time); else if ($('s_mode').value === 'manual') loadPlans();
     tm.length = 1; (o.timers || []).forEach(n => tm.add(new Option(n, n)));
     if (c.message_timer_name && ![...tm.options].some(x => x.value === c.message_timer_name)) tm.add(new Option(c.message_timer_name, c.message_timer_name));
     tm.value = c.message_timer_name || '';
@@ -857,7 +922,7 @@ async function saveSettings(e) {
   await fetch('/api/settings', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({
     pp_host: $('s_host').value.trim() || '127.0.0.1', pp_port: $('s_port').value, pco_app_id: $('s_app').value.trim(),
     pco_secret: $('s_secret').value.trim(), pco_service_type_id: $('s_st').value || null, message_timer_name: $('s_timer').value,
-    demo: $('s_demo').checked }) });
+    demo: $('s_demo').checked, pco_manual: manualPayload() }) });
   closeSettings();
 }
 async function clearPco() {

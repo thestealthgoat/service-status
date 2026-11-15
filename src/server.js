@@ -95,6 +95,27 @@ class PCO {
     this.enabled = !!(cfg.pco_app_id && cfg.pco_secret);
     this.auth = this.enabled ? 'Basic ' + Buffer.from(`${cfg.pco_app_id}:${cfg.pco_secret}`).toString('base64') : '';
     this.st = cfg.pco_service_type_id || null; this.auto = !this.st; this.cache = null; this.at = 0; this.types = null; this.pickAt = 0;
+    this.manual = manualActive(cfg.pco_manual) ? cfg.pco_manual : null;   // Settings → Plan to show → Pick one
+  }
+  // Settings → Pick one: a service type's plans from 14 days back to 42 days ahead (newest last)
+  async plansFor(st) {
+    const now = Date.now(), from = isoDay(new Date(now - 14 * 864e5)), to = isoDay(new Date(now + 42 * 864e5));
+    const base = `/service_types/${encodeURIComponent(st)}/plans`;
+    const [past, future] = await Promise.all([this.get(`${base}?filter=past&order=-sort_date&per_page=6`), this.get(`${base}?filter=future&order=sort_date&per_page=12`)]);
+    const seen = new Set(), out = [];
+    for (const p of [...(past.data || []), ...(future.data || [])]) {
+      const day = (p.attributes.sort_date || '').slice(0, 10);
+      if (!day || day < from || day > to || seen.has(p.id)) continue;
+      seen.add(p.id);
+      out.push({ id: p.id, day, dates: p.attributes.dates || day, title: p.attributes.title || '', series: p.attributes.series_title || '' });
+    }
+    return out.sort((a, b) => a.day.localeCompare(b.day)).map(p => ({ ...p, label: [p.dates, p.series || p.title].filter(Boolean).join(' · ') }));
+  }
+  async planTimes(st, plan) {
+    const d = await this.get(`/service_types/${encodeURIComponent(st)}/plans/${encodeURIComponent(plan)}/plan_times`);
+    return (d.data || []).filter(t => t.attributes.time_type === 'service' && t.attributes.starts_at)
+      .map(t => ({ name: t.attributes.name || hourName(new Date(t.attributes.starts_at)), starts_at: t.attributes.starts_at }))
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   }
   // Planning Center allows about 100 requests per 20 s per person (shared with ProPresenter's own PCO link),
   // so stay well under it and back off when it says "slow down" (HTTP 429).
@@ -171,6 +192,11 @@ class PCO {
   // "<series or title> - <date>"), then how many playlist items match the plan's items. No match -> null.
   async pick(pp) {
     if (!this.enabled) return null;
+    if (this.manual) {              // picked by hand in Settings: that plan, whatever ProPresenter has open
+      const m = this.manual;
+      const d = await this.detail({ id: m.plan_id, st: m.st, service_type: m.st_name || null, title: m.plan_title || null, series: m.plan_series || null, dates: m.plan_dates || null });
+      return { ...d, times: manualTimes(d.times, m), manual: { label: [m.st_name, m.plan_label, m.time_name || 'by the clock'].filter(Boolean).join(' · ') } };
+    }
     let list;
     try { list = await this.candidates(); }
     catch (e) { return { error: 'Planning Center: ' + e.message + (/401|403/.test(e.message) ? ' — check the Application ID and Secret in Settings' : '') }; }
@@ -338,15 +364,28 @@ function alignOrder(ppItems, rows) {
 const rowKeyOf = (rows, i) => { const n = norm(rows[i].title); let k = 0; for (let j = 0; j < i; j++) if (norm(rows[j].title) === n) k++; return n + '#' + k; };
 const avgKeyOf = r => (r.type === 'song' || r.type === 'header') ? null : norm(String(r.title).replace(/:.*$/, ''));
 
+// Settings → Plan to show → Pick one: is that pick still on? It lasts until local midnight of the day it was made.
+const manualActive = (m, now = new Date()) => !!(m && m.plan_id && m.day === isoDay(now));
+// The picked plan's service times, moved onto today at the same clock times (so "vs plan" works for another day's plan),
+// and only the chosen one when a time was picked (all of them if that time is gone from Planning Center).
+function manualTimes(times, m, now = new Date()) {
+  const moved = (times || []).map(t => {
+    const d = new Date(t.starts_at), x = new Date(now); x.setHours(d.getHours(), d.getMinutes(), 0, 0);
+    return { name: t.name, starts_at: x.toISOString(), orig: t.starts_at };
+  });
+  const one = m && m.time ? moved.filter(t => t.orig === m.time) : [];
+  return (one.length ? one : moved).map(({ name, starts_at }) => ({ name, starts_at }));
+}
+
 function serviceStart(pco) {
   if (!pco?.times?.length) return [null, null];
   const now = Date.now();
   let best = null;
   for (const t of pco.times) { const st = new Date(t.starts_at); if (st.getTime() <= now + 15 * 60000) best = st; }
   if (!best) best = new Date(pco.times[0].starts_at);
-  const h = best.getHours();
-  return [best, `${((h + 11) % 12) + 1}${h < 12 ? 'AM' : 'PM'}`];
+  return [best, hourName(best)];
 }
+function hourName(d) { const h = d.getHours(); return `${((h + 11) % 12) + 1}${h < 12 ? 'AM' : 'PM'}`; }
 
 // A video is "playing" while its playhead keeps moving. Time left comes from ProPresenter's video countdown,
 // or from the media's length minus where it's up to. When it stops, the screen goes back to the normal timer.
@@ -380,7 +419,7 @@ function videoState(pp, now) {
 function buildState(cfg, pp, pco, store) {
   const now = Date.now();
   const state = { now: clockSec(new Date()), pp: { ok: !!pp.ok, error: pp.error || null },
-    pco: { enabled: !!pco, error: pco?.error || null, series: pco?.series, dates: pco?.dates, service_type: pco?.service_type || null, title: pco?.title || null, note: pco?.note || null }, demo: !!cfg.demo };
+    pco: { enabled: !!pco, error: pco?.error || null, series: pco?.series, dates: pco?.dates, service_type: pco?.service_type || null, title: pco?.title || null, note: pco?.note || null, manual: pco?.manual || null }, demo: !!cfg.demo };
 
   const si = pp.slide_index?.presentation_index || {};
   const pid = si.presentation_id || {};
@@ -662,7 +701,7 @@ class StatusService {
     return c;
   }
   saveConfig(patch) {
-    const allowed = ['pp_host', 'pp_port', 'page_port', 'pco_app_id', 'pco_secret', 'pco_service_type_id', 'message_timer_name', 'demo'];
+    const allowed = ['pp_host', 'pp_port', 'page_port', 'pco_app_id', 'pco_secret', 'pco_service_type_id', 'message_timer_name', 'demo', 'pco_manual'];
     for (const k of allowed) if (k in patch) this.cfg[k] = patch[k];
     this.cfg.pp_port = parseInt(this.cfg.pp_port, 10) || DEFAULTS.pp_port;
     this.cfg.pco_service_type_id = parseInt(this.cfg.pco_service_type_id, 10) || null;
@@ -678,6 +717,8 @@ class StatusService {
     return this._runs;
   }
   async poll() {
+    // a plan picked by hand lasts until midnight; after that (even if the app was closed over midnight) back to Automatic
+    if (this.cfg.pco_manual && !manualActive(this.cfg.pco_manual)) { try { this.saveConfig({ pco_manual: null }); } catch (e) { console.error('config', e); } }
     try {
       let ppSnap, pcoPlan;
       if (this.cfg.demo) { ppSnap = demoPP(); pcoPlan = demoPCO(); }
@@ -690,7 +731,8 @@ class StatusService {
   publicSettings() {
     const c = this.cfg;
     return { pp_host: c.pp_host, pp_port: c.pp_port, page_port: c.page_port, pco_app_id: c.pco_app_id,
-      pco_secret_set: !!c.pco_secret, pco_service_type_id: c.pco_service_type_id, message_timer_name: c.message_timer_name || '', demo: !!c.demo };
+      pco_secret_set: !!c.pco_secret, pco_service_type_id: c.pco_service_type_id, message_timer_name: c.message_timer_name || '', demo: !!c.demo,
+      pco_manual: manualActive(c.pco_manual) ? c.pco_manual : null };
   }
   start() {
     const loop = async () => { await this.poll(); this.timer = setTimeout(loop, 1000); };
@@ -746,6 +788,18 @@ class StatusService {
       })();
       return;
     }
+    if (req.url.startsWith('/api/plans') || req.url.startsWith('/api/plan_times')) {   // Settings → Pick one (booth computer only)
+      if (!local) return send(403, 'application/json', '{}');
+      const q = new URL(req.url, 'http://local').searchParams, times = req.url.startsWith('/api/plan_times');
+      (async () => {
+        try {
+          if (!this.pco.enabled) throw new Error('add your Planning Center Application ID and Secret first');
+          const out = times ? { times: await this.pco.planTimes(q.get('st'), q.get('plan')) } : { plans: await this.pco.plansFor(q.get('st')) };
+          send(200, 'application/json', JSON.stringify(out));
+        } catch (e) { send(200, 'application/json', JSON.stringify({ plans: [], times: [], error: e.message })); }
+      })();
+      return;
+    }
     if (req.url.startsWith('/api/settings')) {
       if (!local) return send(403, 'application/json', '{"error":"settings can only be changed on the booth computer"}');
       if (req.method === 'GET') return send(200, 'application/json', JSON.stringify(this.publicSettings()));
@@ -780,7 +834,7 @@ class StatusService {
   stop() { clearTimeout(this.timer); this.server?.close(); }
 }
 
-module.exports = { StatusService, DEFAULTS, buildState, RunStore, TRACK, PCO, simName, alignOrder };
+module.exports = { StatusService, DEFAULTS, buildState, RunStore, TRACK, PCO, simName, alignOrder, manualActive, manualTimes };
 
 if (require.main === module) {   // node server.js [--demo]
   const svc = new StatusService(path.join(__dirname, 'dev-config.json'), path.join(__dirname, 'index.html'));
