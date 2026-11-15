@@ -1,15 +1,15 @@
 {
-  "version": "2.0.13",
+  "version": "2.0.14",
   "min_shell": "2.0.0",
-  "notes": "Confidence monitor: a new tab on phones (Now \u00b7 Full order \u00b7 Confidence monitor) and iPads, plus /stage for a TV. The live slide's words big, the next slide under it.",
+  "notes": "Easier to read and use: finished items are readable and marked with a check, connection status shows \u2713 or ! with short labels on phones, clearer button and field outlines, 44 px buttons and tabs, Esc closes the Display and Settings sheets, no iPhone zoom on the dropdowns, and Reduce Motion is respected.",
   "files": {
     "server.js": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.13/server.js",
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.14/server.js",
       "sha256": "e2cefdcf73040908820ef424c3411b62c91271e3bed70ca9624bb89c77105099"
     },
     "index.html": {
-      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.13/index.html",
-      "sha256": "6595f0f6cab84b6da1680ef550c2766ff4c628cf23467d55c30702ff784464db"
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.14/index.html",
+      "sha256": "a9fea58a2bdd0e0a9e848965579502689456842a4c16b1b5ab2d2bb0ff898c5e"
     }
   }
 }

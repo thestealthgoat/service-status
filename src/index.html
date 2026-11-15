@@ -14,7 +14,7 @@
 <style>
   :root {
     --bg: #10141a; --panel: #171d25; --line: #252d38; --text: #eef1f5; --mute: #8792a2; --dim: #5d6876;
-    --acc: #f5a524; --good: #3ddc84; --late: #ff6b6b;
+    --acc: #f5a524; --done: #808b9c; --edge: #646f81; --good: #3ddc84; --late: #ff6b6b;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; background: var(--bg); color: var(--text);
@@ -309,6 +309,27 @@
   .sheet .help { font-size: 13px; color: var(--mute); margin: 2px 0 4px; } .sheet .help b { color: var(--text); font-weight: 500; }
   .sheet select { width: 100%; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 15px; }
   :focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+
+  /* ---- ui-kit checklist fixes (proposed) ---- */
+  li.row.done, li.row.done .t, li.row.done .l, li.mini.done, li.mini.done .t { color: var(--done); }            /* C1 */
+  li.row.done .who, li.mini.done .who { opacity: 1; color: #c9923a; }
+  body.skin-cards li.mini.done { opacity: 1; }
+  li.row.done > span:nth-child(2)::before, li.mini.done > span:nth-child(2)::before { content: "\2713  "; color: var(--good); font-weight: 700; } /* C5 */
+  .gear, .dbtn, .sheet input[type=text], .sheet input[type=password], .sheet input[type=number], .sheet select { border-color: var(--edge); } /* C3 */
+  .sheet .tog input[type=checkbox] { background: #3a4553; box-shadow: inset 0 0 0 1px var(--edge); }
+  .st::before { width: 14px; height: 14px; line-height: 14px; text-align: center; font-size: 10px; font-weight: 800; color: #10141a; vertical-align: -1px; } /* C5 */
+  .st.ok::before { content: "\2713"; } .st.bad::before { content: "!"; }
+  body.m .st { font-size: 12px; color: var(--mute); } body.m .st::before { margin-right: 4px; }
+  body.m .dbtn, body.m .gear { min-height: 44px; min-width: 44px; padding: 0 14px; }                                 /* F7 */
+  body.m .seg button { min-height: 44px; }
+  .sheet select, .sheet input[type=text], .sheet input[type=password], .sheet input[type=number] { font-size: 16px; min-height: 44px; } /* F4 */
+  body.m .gear { font-size: 0; padding: 0; width: 44px; } body.m .gear::before { content: "\2699"; font-size: 20px; }   /* L1 */
+  body.m .top { gap: 8px; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } } /* M3 */
+  .foot, .foot span { color: var(--mute); } .foot b { color: var(--text); }                                       /* C1 */
+  body.m .dbtn, body.m .gear { color: var(--text); }
+  body.m .top .svc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }   /* L1 */
+  body.m .top .demo { flex: none; } body.m .dbtn { padding: 0 12px; } .dbtn, .gear, .st { flex: none; }
 </style>
 </head>
 <body>
@@ -321,7 +342,7 @@
   <span class="st" id="pp">ProPresenter</span>
   <span class="st" id="pco">Planning Center</span>
   <button class="dbtn" id="dbtn" onclick="openDisplay()" title="What this screen shows">Display</button>
-  <button class="gear hidden" id="gear" onclick="openSettings()">Settings</button>
+  <button class="gear hidden" id="gear" onclick="openSettings()" aria-label="Settings">Settings</button>
 </header>
 
 <div class="layout">
@@ -609,9 +630,9 @@ function render(s) {
   $('svc').textContent = s.service ? s.service + ' Service' : 'Service';
   $('series').textContent = s.pco?.items_matched === false || s.pco?.note ? (s.playlist || '') : [s.pco?.service_type, s.pco?.title || s.pco?.series].filter(Boolean).join(' — ');
   if (s.setup_needed && !setupShown) { setupShown = true; openSettings(true); }
-  $('pp').className = 'st ' + (s.pp?.ok ? 'ok' : 'bad');
+  $('pp').className = 'st ' + (s.pp?.ok ? 'ok' : 'bad'); $('pp').textContent = phone.matches ? 'PP' : 'ProPresenter';
   $('pco').className = 'st ' + (s.pco?.enabled && !s.pco?.error ? 'ok' : (s.pco?.enabled ? 'bad' : ''));
-  $('pco').textContent = s.pco?.enabled ? 'Planning Center' : 'Planning Center off';
+  $('pco').textContent = phone.matches ? (s.pco?.enabled ? 'PCO' : 'PCO off') : (s.pco?.enabled ? 'Planning Center' : 'Planning Center off');
   $('demo').classList.toggle('hidden', !s.demo);
   $('gear').classList.toggle('hidden', !s.can_edit);
   $('err').textContent = [s.fatal, s.demo ? '' : s.pp?.error, s.pco?.error].filter(Boolean).join(' · ');
@@ -794,6 +815,14 @@ function renderStage(s) {
   $('sgup').innerHTML = up ? 'Then ' + (up.proj || up.planned ? '<span class="' + tcls(up) + '">' + esc(up.proj || up.planned) + '</span> ' : '') + itemLabel(up) : '';
 }
 
+let sheetOpener = null;
+new MutationObserver(() => {
+  const open = [...document.querySelectorAll('.modal')].find(m => !m.classList.contains('hidden'));
+  if (open && !open.dataset.focused) { open.dataset.focused = '1'; sheetOpener = document.activeElement;
+    const f = open.querySelector('input,select,button'); if (f) f.focus(); }
+  document.querySelectorAll('.modal.hidden').forEach(m => { if (m.dataset.focused) { delete m.dataset.focused; if (sheetOpener) sheetOpener.focus(); } });
+}).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.modal:not(.hidden)').forEach(m => m.classList.add('hidden')); });
 async function tick() {
   try { const r = await fetch('/api/state', {cache: 'no-store'}); render(await r.json()); }
   catch (e) { $('err').textContent = 'Lost connection to the status app'; }
