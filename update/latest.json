@@ -2,5 +2,14 @@
   "version": "2.0.12",
   "min_shell": "2.0.0",
   "notes": "People on every item: 'Close Worship: Tandi' shows Tandi as a tag, like the singers.",
-  "files": {}
+  "files": {
+    "server.js": {
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.12/server.js",
+      "sha256": "2835e2c1c136c49dd27c84314e8df43200b2e5a5a606bd1893146595efc9af0c"
+    },
+    "index.html": {
+      "url": "https://raw.githubusercontent.com/thestealthgoat/service-status/main/update/files/2.0.12/index.html",
+      "sha256": "353ce380d4d4ae5722063f0092e935955627375f9a5e20b46e4e67038d7ab1b5"
+    }
+  }
 }
